@@ -1,10 +1,34 @@
 "use client";
 
+import { useMemo } from "react";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+function sanitizeCallbackUrl(raw: string | null) {
+  if (!raw) return "/";
+  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+
+  try {
+    const url = new URL(raw);
+    if (typeof window !== "undefined" && url.origin === window.location.origin) {
+      return `${url.pathname}${url.search}${url.hash}`;
+    }
+  } catch {
+    return "/";
+  }
+
+  return "/";
+}
+
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const callbackUrl = useMemo(
+    () => sanitizeCallbackUrl(searchParams.get("callbackUrl")),
+    [searchParams]
+  );
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
       <Card className="w-full max-w-md">
@@ -16,7 +40,7 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent className="grid gap-4">
           <div className="grid gap-2">
-            <Button variant="outline" onClick={() => signIn("google", { callbackUrl: "/" })}>
+            <Button variant="outline" onClick={() => signIn("google", { callbackUrl })}>
               <svg
                 className="mr-2 h-4 w-4"
                 aria-hidden="true"

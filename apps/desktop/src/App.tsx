@@ -69,6 +69,13 @@ function defaultClientName() {
   return `Trading Journal ${platform.toUpperCase()}`;
 }
 
+function buildDesktopConnectUrl(baseUrl: string, pairingCode: string) {
+  const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
+  const normalizedCode = pairingCode.trim().toUpperCase();
+  if (!normalizedBaseUrl || !normalizedCode) return '';
+  return `${normalizedBaseUrl}/desktop/connect?pairingCode=${encodeURIComponent(normalizedCode)}`;
+}
+
 export default function App() {
   const [backendUrl, setBackendUrl] = useState(() => getSavedBackendUrl() || defaultBackendUrl());
   const [clientName, setClientName] = useState(() => defaultClientName());
@@ -116,6 +123,11 @@ export default function App() {
       };
     });
   }, [cockpit?.pendingOrders]);
+
+  const pairingBrowserUrl = useMemo(() => {
+    if (!pairing?.pairingCode) return '';
+    return buildDesktopConnectUrl(backendUrl, pairing.pairingCode);
+  }, [backendUrl, pairing?.pairingCode]);
 
   const loadDesktopState = useCallback(
     async (accessToken: string) => {
@@ -203,12 +215,75 @@ export default function App() {
         clientPlatform: detectClientPlatform(),
       });
       setPairing(response);
-      setMessage('Pairing code created. Approve it from the web app.');
+      const approvalUrl = buildDesktopConnectUrl(backendUrl, response.pairingCode);
+      if (!approvalUrl) {
+        setMessage('Pairing code created. Use a valid backend URL to continue.');
+        return;
+      }
+
+      const popup = window.open(approvalUrl, '_blank', 'noopener,noreferrer');
+      if (popup) {
+        setMessage('Browser opened. Sign in with Google, approve, then return and press Complete Pairing.');
+        return;
+      }
+
+      try {
+        if (navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(approvalUrl);
+          setMessage('Pairing code created. Browser blocked pop-up, link copied to clipboard.');
+          return;
+        }
+      } catch {
+        // Fall through to manual message.
+      }
+
+      setMessage('Pairing code created. Click "Open Browser Login" to continue.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to start pairing');
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleOpenBrowserLogin() {
+    if (!pairing?.pairingCode) return;
+    const approvalUrl = buildDesktopConnectUrl(backendUrl, pairing.pairingCode);
+    if (!approvalUrl) {
+      setMessage('Invalid backend URL for browser login');
+      return;
+    }
+
+    const popup = window.open(approvalUrl, '_blank', 'noopener,noreferrer');
+    if (popup) {
+      setMessage('Browser opened. Complete Google login and approval there.');
+      return;
+    }
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(approvalUrl);
+        setMessage('Popup blocked. Approval URL copied to clipboard.');
+        return;
+      }
+    } catch {
+      // Fall through to manual message.
+    }
+
+    setMessage(`Open manually: ${approvalUrl}`);
+  }
+
+  async function handleCopyBrowserLink() {
+    if (!pairingBrowserUrl) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(pairingBrowserUrl);
+        setMessage('Approval URL copied to clipboard.');
+        return;
+      }
+    } catch {
+      // Fall through to manual message.
+    }
+    setMessage(`Copy this URL manually: ${pairingBrowserUrl}`);
   }
 
   async function handleCompletePairing() {
@@ -340,15 +415,26 @@ export default function App() {
           <h2>Approve Desktop Device</h2>
           <div className="code-block">{pairing.pairingCode}</div>
           <p className="hint">
-            Open your web session and approve this code.
+            Open browser login, continue with Google, and the device will be approved automatically.
           </p>
           <p className="hint">
             Expires at: <b>{formatDateIso(pairing.expiresAt)}</b>
           </p>
+          {pairingBrowserUrl ? (
+            <p className="hint">
+              Browser URL: <code>{pairingBrowserUrl}</code>
+            </p>
+          ) : null}
           <p className="hint">
-            API: <code>/api/desktop/auth/approve</code>
+            Then return here and press <b>Complete Pairing</b>.
           </p>
           <div className="actions">
+            <button onClick={handleOpenBrowserLogin} disabled={busy} className="btn">
+              Open Browser Login
+            </button>
+            <button onClick={handleCopyBrowserLink} disabled={busy || !pairingBrowserUrl} className="btn">
+              Copy Browser Link
+            </button>
             <button onClick={handleCompletePairing} disabled={busy} className="btn btn-primary">
               Complete Pairing
             </button>
