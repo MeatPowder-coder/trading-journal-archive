@@ -1,0 +1,209 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+    --profit: #16a34a;
+    --loss: #dc2626;
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --profit: #16a34a;
+    --loss: #ef4444;
+  }
+
+  .theme-neon {
+    --background: 265 80% 5%;
+    --foreground: 280 20% 95%;
+    --card: 265 50% 10%;
+    --card-foreground: 280 20% 95%;
+    --popover: 265 50% 10%;
+    --popover-foreground: 280 20% 95%;
+    --primary: 300 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 265 30% 20%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 265 30% 20%;
+    --muted-foreground: 280 20% 70%;
+    --accent: 300 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 280 60% 40%;
+    --input: 280 60% 40%;
+    --ring: 300 100% 50%;
+    --radius: 0.75rem;
+    --profit: #06b6d4;
+    --loss: #ef4444;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Neon Theme Overrides */
+.theme-neon body {
+  background: radial-gradient(circle at top right, hsl(265, 60%, 12%), hsl(265, 80%, 5%) 40%, hsl(265, 80%, 2%) 100%) !important;
+  background-attachment: fixed !important;
+}
+
+.theme-neon .bg-white,
+.theme-neon .bg-zinc-50,
+.theme-neon .bg-zinc-100,
+.theme-neon .dark\:bg-zinc-900,
+.theme-neon .dark\:bg-zinc-950 {
+  background-color: rgba(30, 15, 45, 0.8) !important;
+  /* Increased opacity, removed expensive blur */
+}
+
+.theme-neon .border-zinc-200,
+.theme-neon .dark\:border-zinc-800 {
+  border-color: hsl(280, 50%, 20%) !important;
+  /* Softer border */
+}
+
+/* Card Glows */
+.theme-neon .shadow-sm,
+.theme-neon .shadow-md,
+.theme-neon .shadow-xl,
+.theme-neon .card {
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(168, 85, 247, 0.15) !important;
+  /* Much softer card outline */
+}
+
+/* Swap Green (Profit) -> Cyan */
+.theme-neon .text-green-600,
+.theme-neon .text-green-500 {
+  color: var(--profit) !important;
+  text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+.theme-neon .bg-green-600,
+.theme-neon .bg-green-500 {
+  background-color: var(--profit) !important;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+.theme-neon .bg-green-50 {
+  background-color: rgba(6, 182, 212, 0.1) !important;
+  color: var(--profit) !important;
+  border-color: rgba(6, 182, 212, 0.3) !important;
+}
+
+/* Swap Red (Loss) -> Red */
+.theme-neon .text-red-600,
+.theme-neon .text-red-500 {
+  color: var(--loss) !important;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.theme-neon .bg-red-600,
+.theme-neon .bg-red-500 {
+  background-color: var(--loss) !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.theme-neon .bg-red-50,
+.theme-neon .bg-red-100 {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  color: var(--loss) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Text Overrides */
+.theme-neon .text-zinc-900,
+.theme-neon .text-zinc-700,
+.theme-neon .dark\:text-zinc-50,
+.theme-neon .dark\:text-white {
+  color: #f3e8ff !important;
+  /* Very light purple */
+}
+
+.theme-neon .text-zinc-500,
+.theme-neon .text-zinc-400 {
+  color: #c084fc !important;
+  /* Light purple */
+}
+
+/* Button Glows */
+.theme-neon button {
+  transition: all 0.3s ease;
+}
+
+.theme-neon button:hover {
+  box-shadow: 0 0 15px rgba(217, 70, 239, 0.6);
+}

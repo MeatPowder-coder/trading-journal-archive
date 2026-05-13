@@ -1,0 +1,177 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model cuentas {
+  id                                                     Int              @id @default(autoincrement())
+  nombre                                                 String           @db.VarChar(100)
+  moneda                                                 String?          @default("COP") @db.VarChar(10)
+  tipo                                                   String?          @db.VarChar(50)
+  saldo_actual                                           Decimal?         @default(0) @db.Decimal(15, 2)
+  cupo_maximo                                            Decimal?         @default(0) @db.Decimal(15, 2)
+  tasa_ea                                                Decimal?         @default(0) @db.Decimal(5, 2)
+  deuda_calculada                                        Decimal?         @default(dbgenerated("\nCASE\n    WHEN (cupo_maximo > (0)::numeric) THEN (cupo_maximo - saldo_actual)\n    ELSE (0)::numeric\nEND")) @db.Decimal(15, 2)
+  trades_activos                                         trades_activos[]
+  transacciones_transacciones_cuenta_destino_idTocuentas transacciones[]  @relation("transacciones_cuenta_destino_idTocuentas")
+  transacciones_transacciones_cuenta_idTocuentas         transacciones[]  @relation("transacciones_cuenta_idTocuentas")
+}
+
+model trades_activos {
+  id                    Int                         @id @default(autoincrement())
+  simbolo               String                      @db.VarChar(20)
+  direccion             String                      @db.VarChar(10)
+  monto_margin          Decimal                     @db.Decimal(15, 2)
+  apalancamiento        Decimal?                    @default(1) @db.Decimal(5, 2)
+  precio_entrada        Decimal?                    @db.Decimal(20, 8)
+  precio_salida         Decimal?                    @db.Decimal(20, 8)
+  estado                String?                     @default("OPEN") @db.VarChar(20)
+  fecha_apertura        DateTime?                   @default(now()) @db.Timestamptz(6)
+  fecha_cierre          DateTime?                   @db.Timestamptz(6)
+  tipo_estrategia       String?                     @default("TRADING") @db.VarChar(20)
+  stop_loss             Decimal?                    @db.Decimal(20, 8)
+  take_profit           Decimal?                    @db.Decimal(20, 8)
+  sl_status             String?                     @default("NONE") @db.VarChar(20)
+  sl_source             String?                     @db.VarChar(30)
+  sl_reason             String?
+  timeframe             String?                     @db.VarChar(10)
+  setup_tag             String?                     @db.VarChar(50)
+  emocion_entrada       String?                     @db.VarChar(30)
+  cuenta_id             Int?
+  broker                String?                     @default("MANUAL") @db.VarChar(50)
+  exchange_type         String?                     @db.VarChar(32)
+  external_order_id     String?                     @db.VarChar(64)
+  external_trade_id     String?                     @unique @db.VarChar(64)
+  ticker_api            String?                     @db.VarChar(20)
+  screenshot_url        String?
+  nombre_jugada         String?                     @db.VarChar(100)
+  zona_entrada          String?                     @db.VarChar(100)
+  tendencia_macro       tendencia_type?
+  contexto_mercado      contexto_mercado_type?
+  volatilidad           volatilidad_type?
+  tipo_liquidez         tipo_liquidez_type?
+  estado_delta          estado_delta_type?
+  volumen_estado        volumen_estado_type?
+  absorcion_detectada   Boolean?                    @default(false)
+  calificacion_personal calificacion_personal_type?
+  notas_aprendizaje     String?
+  notas_cierre          String?
+  pnl_realizado         Decimal?                    @default(dbgenerated("\nCASE\n    WHEN ((precio_salida IS NOT NULL) AND (precio_entrada > (0)::numeric) AND ((estado)::text = 'CLOSED'::text)) THEN\n    CASE\n        WHEN ((direccion)::text = 'LONG'::text) THEN (((precio_salida - precio_entrada) / precio_entrada) * (monto_margin * apalancamiento))\n        WHEN ((direccion)::text = 'SHORT'::text) THEN (((precio_entrada - precio_salida) / precio_entrada) * (monto_margin * apalancamiento))\n        ELSE (0)::numeric\n    END\n    ELSE NULL::numeric\nEND")) @db.Decimal(15, 2)
+  cuentas               cuentas?                    @relation(fields: [cuenta_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_trades_cuenta")
+}
+
+model transacciones {
+  id                                               Int       @id @default(autoincrement())
+  descripcion                                      String?
+  monto                                            Decimal   @db.Decimal(15, 2)
+  categoria                                        String?   @db.VarChar(50)
+  tipo                                             String    @db.VarChar(50)
+  estado                                           String?   @default("realizado") @db.VarChar(20)
+  fecha_transaccion                                DateTime? @default(now()) @db.Timestamptz(6)
+  fecha_vencimiento                                DateTime? @db.Timestamptz(6)
+  cuotas_totales                                   Int?      @default(1)
+  cuenta_id                                        Int?
+  cuenta_destino_id                                Int?
+  cuentas_transacciones_cuenta_destino_idTocuentas cuentas?  @relation("transacciones_cuenta_destino_idTocuentas", fields: [cuenta_destino_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_transacciones_destino")
+  cuentas_transacciones_cuenta_idTocuentas         cuentas?  @relation("transacciones_cuenta_idTocuentas", fields: [cuenta_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_transacciones_cuenta")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model bot_sessions {
+  chat_id             BigInt    @id
+  last_screenshot_url String?
+  last_updated        DateTime? @default(now()) @db.Timestamp(6)
+}
+
+enum calificacion_personal_type {
+  SEGUI_REGLAS
+  ROMPI_REGLAS
+}
+
+enum contexto_mercado_type {
+  TENDENCIA_ALCISTA
+  TENDENCIA_BAJISTA
+  RANGO
+  CONSOLIDACION
+}
+
+enum estado_delta_type {
+  POSITIVO
+  NEGATIVO
+  DIVERGENTE
+  NEUTRO
+}
+
+enum tendencia_type {
+  ALCISTA
+  BAJISTA
+  LATERAL
+  NO_SE
+}
+
+enum tipo_liquidez_type {
+  SWEEP_HIGHS
+  SWEEP_LOWS
+  INDUCEMENT
+  NINGUNA
+}
+
+enum volatilidad_type {
+  BAJA
+  MEDIA
+  ALTA
+}
+
+enum volumen_estado_type {
+  MUCHO_VOLUMEN
+  POCO_VOLUMEN
+  NORMAL
+}

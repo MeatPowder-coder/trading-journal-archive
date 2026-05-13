@@ -1,0 +1,141 @@
+"use client";
+
+import { DayTradingTable } from "@/components/DayTradingTable";
+import { PortfolioList } from "@/components/PortfolioList";
+import { TransactionList } from "@/components/TransactionList";
+import { TradingStats } from "@/components/TradingStats";
+import { CalendarPnL } from "@/components/CalendarPnL";
+import { ActiveTrades } from "@/components/ActiveTrades";
+import { ThemeSelector } from "@/components/ThemeSelector";
+import { AccountBalance } from "@/components/AccountBalance";
+import { OpenTradeModal } from "@/components/OpenTradeModal";
+import { useRealTimePnL } from "@/hooks/useRealTimePnL";
+import { Zap, LogOut, LayoutDashboard, Wallet, PieChart, Receipt, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useSubscription, gql } from "@apollo/client";
+import { useState, useEffect } from "react";
+import { signOut } from "next-auth/react";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const TRADES_SUBSCRIPTION = gql`
+  subscription GetTrades {
+    trades_activos(order_by: {id: desc}) {
+      id
+      simbolo
+      precio_entrada
+      precio_salida
+      pnl_realizado
+      pnl_bruto
+      comision
+      estado
+      direccion
+      apalancamiento
+      ticker_api
+      broker
+      fecha_apertura
+      fecha_cierre
+      monto_margin
+      cuenta_id
+      tipo_estrategia
+      screenshot_url
+      nombre_jugada
+      zona_entrada
+      contexto_mercado
+      volatilidad
+      tipo_liquidez
+      estado_delta
+      volumen_estado
+      absorcion_detectada
+      calificacion_personal
+      notas_aprendizaje
+      notas_cierre
+    }
+  }
+`;
+
+import { useSearchParams } from "next/navigation";
+
+export default function Home() {
+  const searchParams = useSearchParams();
+  const activeTab = searchParams.get("tab") || "trading";
+
+  const { data, loading, error } = useSubscription(TRADES_SUBSCRIPTION);
+  const trades = data?.trades_activos || [];
+  const { calculateRealTimePnL, prices, loading: pricesLoading } = useRealTimePnL(trades, ['USDCOP=X']);
+
+  // Crear una versión de los trades con el PnL actualizado para las estadísticas (solo visual)
+  const tradesWithRealTimePnL = trades.map((trade: any) => {
+    if (trade.estado === 'ABIERTO' || trade.estado === 'OPEN') {
+      return {
+        ...trade,
+        pnl_realizado: calculateRealTimePnL(trade)
+      };
+    }
+    return trade;
+  });
+
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 overflow-x-hidden pt-12 md:pt-0">
+      {/* Header removed - moved to Sidebar */}
+
+      <main className="max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Dashboard</h1>
+          <p className="text-zinc-500 dark:text-zinc-400">Monitor your active positions and performance.</p>
+        </div>
+
+        <Tabs value={activeTab} className="space-y-6">
+          {/* TabsList removed - Navigation handled by Sidebar */}
+
+          <TabsContent value="trading" className="space-y-4">
+            <div className="flex justify-end mb-4">
+              <OpenTradeModal />
+            </div>
+            <ActiveTrades
+              trades={trades}
+              prices={prices}
+              calculateRealTimePnL={calculateRealTimePnL}
+            />
+
+            <div className="mb-8">
+              <TradingStats trades={tradesWithRealTimePnL.filter((t: any) => t.tipo_estrategia === 'TRADING' || !t.tipo_estrategia || t.tipo_estrategia === 'null')} />
+            </div>
+
+            <div className="mb-8">
+              <CalendarPnL trades={trades} />
+            </div>
+
+            <DayTradingTable
+              trades={trades.filter((t: any) => t.tipo_estrategia === 'TRADING' || !t.tipo_estrategia || t.tipo_estrategia === 'null')}
+              loading={loading}
+              error={error}
+              prices={prices}
+              calculateRealTimePnL={calculateRealTimePnL}
+            />
+          </TabsContent>
+
+          <TabsContent value="portfolio" className="space-y-4">
+            <PortfolioList
+              trades={trades}
+              loading={loading}
+              prices={prices}
+            />
+          </TabsContent>
+
+          <TabsContent value="cuentas" className="space-y-4">
+            <AccountBalance
+              trades={trades}
+              prices={prices}
+              calculateRealTimePnL={calculateRealTimePnL}
+            />
+          </TabsContent>
+
+          <TabsContent value="transacciones" className="space-y-4">
+            <TransactionList />
+          </TabsContent>
+        </Tabs>
+      </main>
+    </div>
+  );
+}

@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  trading-journal-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Estos args son para tiempo de construcción (BUILD time)
+        - NEXT_PUBLIC_HASURA_ADMIN_SECRET=${NEXT_PUBLIC_HASURA_ADMIN_SECRET}
+        - NEXT_PUBLIC_HASURA_HTTP_URL=https://hasura.agentame.xyz/v1/graphql
+        - NEXT_PUBLIC_HASURA_WS_URL=wss://hasura.agentame.xyz/v1/graphql
+    image: trading-journal-web:latest
+    container_name: trading-journal-web
+    restart: always
+    # Eliminamos mapeo de puertos directos si usas NPM para redirigir tráfico
+    # O déjalo si NPM apunta a IP_VM:3000. Pero lo ideal es usar la red interna:
+    expose:
+      - "3000" 
+    environment:
+      - NODE_ENV=production
+      # URLs Públicas (Cliente)
+      - NEXT_PUBLIC_HASURA_HTTP_URL=https://hasura.agentame.xyz/v1/graphql
+      - NEXT_PUBLIC_HASURA_WS_URL=wss://hasura.agentame.xyz/v1/graphql
+      # URLs Internas (Servidor - SSR)
+      # Nota: Dentro de Docker, Hasura se llama 'hasura' (nombre del servicio)
+      - HASURA_INTERNAL_URL=http://hasura:8080/v1/graphql 
+      
+      - NEXT_PUBLIC_HASURA_ADMIN_SECRET=pon_una_clave_segura_aqui
+      - NEXTAUTH_URL=https://journal.agentame.xyz
+      - NEXTAUTH_SECRET=zH4Sp3a3pTF3kB0dM9k8q8fN97LBQebr
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - ALLOWED_EMAIL=${ALLOWED_EMAIL}
+      - DATABASE_URL=${DATABASE_URL}
+      - BINANCE_FUTURES_API_KEY=${BINANCE_FUTURES_API_KEY}
+      - BINANCE_FUTURES_API_SECRET=${BINANCE_FUTURES_API_SECRET}
+      - GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - NVIDIA_API_BASE_URL=${NVIDIA_API_BASE_URL}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - KIMI_MODEL_ID=${KIMI_MODEL_ID}
+    volumes:
+      - /home/ubuntu/static_assets/uploads:/app/public/uploads
+    networks:
+      - infra-net
+
+  alerts-monitor:
+    image: node:20-alpine
+    container_name: alerts-monitor
+    restart: unless-stopped
+    working_dir: /app
+    command: ["node", "scripts/alerts-monitor.js"]
+    volumes:
+      - ./:/app
+    environment:
+      - ALERTS_BASE_URL=http://trading-journal-web:3000
+      - ALERTS_INTERVAL_MS=60000
+      - ALERTS_INTERNAL_TOKEN=${ALERTS_INTERNAL_TOKEN}
+    depends_on:
+      - trading-journal-web
+    networks:
+      - infra-net
+
+  binance-listener-dev:
+    image: node:18
+    container_name: binance-listener-dev
+    restart: unless-stopped
+    working_dir: /app
+    command: ["node", "scripts/binance-listener.js", "--spot", "--futures"]
+    volumes:
+      - ./:/app
+    env_file:
+      - .env
+    networks:
+      - infra-net
+
+networks:
+  infra-net:
+    external: true
