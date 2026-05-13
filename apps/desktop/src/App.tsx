@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
+import { openUrl as openExternalUrl } from '@tauri-apps/plugin-opener';
 import {
   defaultBackendUrl,
   fetchDesktopCockpit,
@@ -9,10 +11,13 @@ import {
   startDesktopPairing,
 } from './lib/api';
 import {
+  clearPendingDesktopAuth,
   clearTokens,
+  getPendingDesktopAuth,
   getSavedBackendUrl,
   getSavedClientName,
   getTokens,
+  savePendingDesktopAuth,
   saveBackendUrl,
   saveClientName,
   saveTokens,
@@ -21,6 +26,7 @@ import type {
   DesktopCockpitResponse,
   DesktopSessionResponse,
   DesktopTokens,
+  PendingDesktopAuth,
   PairingStartResponse,
 } from './types';
 
@@ -69,17 +75,38 @@ function defaultClientName() {
   return `Trading Journal ${platform.toUpperCase()}`;
 }
 
-function buildDesktopConnectUrl(baseUrl: string, pairingCode: string) {
+function buildDesktopConnectUrl(baseUrl: string, pairingId: string) {
   const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
-  const normalizedCode = pairingCode.trim().toUpperCase();
-  if (!normalizedBaseUrl || !normalizedCode) return '';
-  return `${normalizedBaseUrl}/desktop/connect?pairingCode=${encodeURIComponent(normalizedCode)}`;
+  const normalizedPairingId = pairingId.trim();
+  if (!normalizedBaseUrl || !normalizedPairingId) return '';
+  return `${normalizedBaseUrl}/desktop/connect?pairingId=${encodeURIComponent(normalizedPairingId)}`;
+}
+
+function normalizePairingId(value: string) {
+  const v = value.trim().toLowerCase();
+  if (!v) return '';
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)) {
+    return '';
+  }
+  return v;
+}
+
+function parsePairingIdFromDeepLink(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'trading-journal:') return '';
+    const id = parsed.searchParams.get('pairingId') || '';
+    return normalizePairingId(id);
+  } catch {
+    return '';
+  }
 }
 
 export default function App() {
   const [backendUrl, setBackendUrl] = useState(() => getSavedBackendUrl() || defaultBackendUrl());
   const [clientName, setClientName] = useState(() => defaultClientName());
   const [pairing, setPairing] = useState<PairingStartResponse | null>(null);
+  const [pendingAuth, setPendingAuth] = useState<PendingDesktopAuth | null>(() => getPendingDesktopAuth());
   const [tokens, setTokens] = useState(() => getTokens());
   const [session, setSession] = useState<DesktopSessionResponse | null>(null);
   const [cockpit, setCockpit] = useState<DesktopCockpitResponse | null>(null);
@@ -125,9 +152,10 @@ export default function App() {
   }, [cockpit?.pendingOrders]);
 
   const pairingBrowserUrl = useMemo(() => {
-    if (!pairing?.pairingCode) return '';
-    return buildDesktopConnectUrl(backendUrl, pairing.pairingCode);
-  }, [backendUrl, pairing?.pairingCode]);
+    const pairingId = pendingAuth?.pairingId || pairing?.pairingId || '';
+    if (!pairingId) return '';
+    return buildDesktopConnectUrl(backendUrl, pairingId);
+  }, [backendUrl, pairing?.pairingId, pendingAuth?.pairingId]);
 
   const loadDesktopState = useCallback(
     async (accessToken: string) => {
@@ -169,6 +197,14 @@ export default function App() {
 
   useEffect(() => {
     if (!tokens?.accessToken) return;
+    if (!pendingAuth && !pairing) return;
+    clearPendingDesktopAuth();
+    setPendingAuth(null);
+    setPairing(null);
+  }, [pairing, pendingAuth, tokens?.accessToken]);
+
+  useEffect(() => {
+    if (!tokens?.accessToken) return;
     const accessToken = tokens.accessToken;
     const refreshToken = tokens.refreshToken;
     let disposed = false;
@@ -205,9 +241,87 @@ export default function App() {
     };
   }, [loadDesktopState, rotateTokens, tokens?.accessToken, tokens?.refreshToken]);
 
+  const completePendingPairing = useCallback(
+    async (expectedPairingId?: string) => {
+      const activePairing = pendingAuth || getPendingDesktopAuth();
+      if (!activePairing) {
+        setMessage('No pending desktop login found');
+        return;
+      }
+
+      const normalizedExpected = expectedPairingId ? normalizePairingId(expectedPairingId) : '';
+      const normalizedActive = normalizePairingId(activePairing.pairingId);
+      if (normalizedExpected && normalizedExpected !== normalizedActive) {
+        setMessage('Login response does not match current session');
+        return;
+      }
+
+      setBusy(true);
+      setMessage('Finalizing desktop login');
+      try {
+        let response = await pollDesktopPairing({
+          baseUrl: backendUrl,
+          pairingId: activePairing.pairingId,
+          pollToken: activePairing.pollToken,
+        });
+
+        if (response.status === 'PENDING') {
+          await new Promise((resolve) => setTimeout(resolve, 750));
+          response = await pollDesktopPairing({
+            baseUrl: backendUrl,
+            pairingId: activePairing.pairingId,
+            pollToken: activePairing.pollToken,
+          });
+        }
+
+        if (response.status !== 'EXCHANGED') {
+          setMessage('Waiting for Google approval in browser');
+          return;
+        }
+
+        const nextTokens: DesktopTokens = {
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken,
+        };
+        saveTokens(nextTokens);
+        setTokens(nextTokens);
+        clearPendingDesktopAuth();
+        setPendingAuth(null);
+        setPairing(null);
+        setMessage('Desktop login completed');
+      } catch (error) {
+        const text = error instanceof Error ? error.message : 'Desktop login failed';
+        if (/expirad|not found|revocad/i.test(text)) {
+          clearPendingDesktopAuth();
+          setPendingAuth(null);
+          setPairing(null);
+        }
+        setMessage(text);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [backendUrl, pendingAuth]
+  );
+
+  async function openBrowserForPairing(url: string) {
+    try {
+      await openExternalUrl(url);
+      return true;
+    } catch {
+      try {
+        const popup = window.open(url, '_blank', 'noopener,noreferrer');
+        if (popup) return true;
+      } catch {
+        // Ignore and return false.
+      }
+      return false;
+    }
+  }
+
   async function handleStartPairing() {
     setBusy(true);
-    setMessage('Creating pairing code');
+    setMessage('Starting Google login');
     try {
       const response = await startDesktopPairing({
         baseUrl: backendUrl,
@@ -215,107 +329,85 @@ export default function App() {
         clientPlatform: detectClientPlatform(),
       });
       setPairing(response);
-      const approvalUrl = buildDesktopConnectUrl(backendUrl, response.pairingCode);
+
+      const nextPending: PendingDesktopAuth = {
+        pairingId: response.pairingId,
+        pollToken: response.pollToken,
+        expiresAt: response.expiresAt,
+      };
+      savePendingDesktopAuth(nextPending);
+      setPendingAuth(nextPending);
+
+      const approvalUrl = buildDesktopConnectUrl(backendUrl, response.pairingId);
       if (!approvalUrl) {
-        setMessage('Pairing code created. Use a valid backend URL to continue.');
+        setMessage('Invalid backend URL');
         return;
       }
 
-      const popup = window.open(approvalUrl, '_blank', 'noopener,noreferrer');
-      if (popup) {
-        setMessage('Browser opened. Sign in with Google, approve, then return and press Complete Pairing.');
-        return;
+      const opened = await openBrowserForPairing(approvalUrl);
+      if (opened) {
+        setMessage('Browser opened. Continue with Google.');
+      } else {
+        setMessage('Could not open browser automatically');
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to start login');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRetryBrowserLogin() {
+    if (!pairingBrowserUrl) return;
+    const opened = await openBrowserForPairing(pairingBrowserUrl);
+    if (opened) {
+      setMessage('Browser opened. Continue with Google.');
+      return;
+    }
+    setMessage(`Open manually: ${pairingBrowserUrl}`);
+  }
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+
+    async function connectDeepLinks() {
+      try {
+        const startUrls = await getCurrent();
+        if (!disposed && startUrls?.length) {
+          for (const url of startUrls) {
+            const pairingIdFromLink = parsePairingIdFromDeepLink(url);
+            if (pairingIdFromLink) {
+              await completePendingPairing(pairingIdFromLink);
+              break;
+            }
+          }
+        }
+      } catch {
+        // Ignore deep-link startup errors.
       }
 
       try {
-        if (navigator?.clipboard?.writeText) {
-          await navigator.clipboard.writeText(approvalUrl);
-          setMessage('Pairing code created. Browser blocked pop-up, link copied to clipboard.');
-          return;
-        }
+        unlisten = await onOpenUrl(async (urls) => {
+          for (const url of urls) {
+            const pairingIdFromLink = parsePairingIdFromDeepLink(url);
+            if (pairingIdFromLink) {
+              await completePendingPairing(pairingIdFromLink);
+              break;
+            }
+          }
+        });
       } catch {
-        // Fall through to manual message.
+        // Unsupported without deep-link + single-instance plugins.
       }
-
-      setMessage('Pairing code created. Click "Open Browser Login" to continue.');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Failed to start pairing');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleOpenBrowserLogin() {
-    if (!pairing?.pairingCode) return;
-    const approvalUrl = buildDesktopConnectUrl(backendUrl, pairing.pairingCode);
-    if (!approvalUrl) {
-      setMessage('Invalid backend URL for browser login');
-      return;
     }
 
-    const popup = window.open(approvalUrl, '_blank', 'noopener,noreferrer');
-    if (popup) {
-      setMessage('Browser opened. Complete Google login and approval there.');
-      return;
-    }
-
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(approvalUrl);
-        setMessage('Popup blocked. Approval URL copied to clipboard.');
-        return;
-      }
-    } catch {
-      // Fall through to manual message.
-    }
-
-    setMessage(`Open manually: ${approvalUrl}`);
-  }
-
-  async function handleCopyBrowserLink() {
-    if (!pairingBrowserUrl) return;
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(pairingBrowserUrl);
-        setMessage('Approval URL copied to clipboard.');
-        return;
-      }
-    } catch {
-      // Fall through to manual message.
-    }
-    setMessage(`Copy this URL manually: ${pairingBrowserUrl}`);
-  }
-
-  async function handleCompletePairing() {
-    if (!pairing) return;
-    setBusy(true);
-    setMessage('Checking pairing status');
-    try {
-      const response = await pollDesktopPairing({
-        baseUrl: backendUrl,
-        pairingId: pairing.pairingId,
-        pollToken: pairing.pollToken,
-      });
-      if (response.status === 'PENDING') {
-        setMessage('Still pending approval in web app');
-        return;
-      }
-      if (response.status === 'EXCHANGED') {
-        const nextTokens: DesktopTokens = {
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken,
-        };
-        saveTokens(nextTokens);
-        setTokens(nextTokens);
-        setPairing(null);
-        setMessage('Pairing approved and tokens received');
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Pairing status check failed');
-    } finally {
-      setBusy(false);
-    }
-  }
+    connectDeepLinks();
+    return () => {
+      disposed = true;
+      if (unlisten) unlisten();
+    };
+  }, [completePendingPairing]);
 
   async function handleRotateTokens() {
     if (!tokens?.refreshToken) return;
@@ -353,10 +445,12 @@ export default function App() {
         accessToken: tokens.accessToken,
       });
       clearTokens();
+      clearPendingDesktopAuth();
       setTokens(null);
       setSession(null);
       setCockpit(null);
       setPairing(null);
+      setPendingAuth(null);
       setLastSyncAt(null);
       setMessage('Desktop session revoked');
     } catch (error) {
@@ -405,38 +499,33 @@ export default function App() {
         </div>
         <div className="actions">
           <button onClick={handleStartPairing} disabled={busy} className="btn btn-primary">
-            Start Pairing
+            Sign In With Google
           </button>
+          {pendingAuth && !tokens ? (
+            <button onClick={handleRetryBrowserLogin} disabled={busy} className="btn">
+              Reopen Browser
+            </button>
+          ) : null}
         </div>
       </section>
 
-      {pairing && !tokens && (
+      {(pendingAuth || pairing) && !tokens && (
         <section className="panel pairing">
-          <h2>Approve Desktop Device</h2>
-          <div className="code-block">{pairing.pairingCode}</div>
+          <h2>Browser Login In Progress</h2>
           <p className="hint">
-            Open browser login, continue with Google, and the device will be approved automatically.
+            Complete Google login in your browser. Then accept the prompt to open Trading Journal Desktop.
           </p>
           <p className="hint">
-            Expires at: <b>{formatDateIso(pairing.expiresAt)}</b>
+            Expires at: <b>{formatDateIso((pendingAuth || pairing)?.expiresAt)}</b>
           </p>
           {pairingBrowserUrl ? (
             <p className="hint">
               Browser URL: <code>{pairingBrowserUrl}</code>
             </p>
           ) : null}
-          <p className="hint">
-            Then return here and press <b>Complete Pairing</b>.
-          </p>
           <div className="actions">
-            <button onClick={handleOpenBrowserLogin} disabled={busy} className="btn">
-              Open Browser Login
-            </button>
-            <button onClick={handleCopyBrowserLink} disabled={busy || !pairingBrowserUrl} className="btn">
-              Copy Browser Link
-            </button>
-            <button onClick={handleCompletePairing} disabled={busy} className="btn btn-primary">
-              Complete Pairing
+            <button onClick={handleRetryBrowserLogin} disabled={busy || !pairingBrowserUrl} className="btn">
+              Open Browser Again
             </button>
           </div>
         </section>

@@ -5,27 +5,53 @@ function normalizePairingCode(value: unknown) {
   return value.trim().toUpperCase();
 }
 
+function normalizePairingId(value: unknown) {
+  if (typeof value !== 'string') return '';
+  const v = value.trim().toLowerCase();
+  if (!v) return '';
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)) {
+    return '';
+  }
+  return v;
+}
+
 export async function approveDesktopPairingCode(params: {
   pairingCode: unknown;
+  pairingId?: unknown;
   userId: string;
   userEmail?: string | null;
   userName?: string | null;
 }) {
   const pairingCode = normalizePairingCode(params.pairingCode);
-  if (!pairingCode) {
-    return { status: 400, payload: { error: 'pairingCode requerido' } };
+  const pairingId = normalizePairingId(params.pairingId);
+
+  if (!pairingCode && !pairingId) {
+    return { status: 400, payload: { error: 'pairingCode o pairingId requerido' } };
   }
 
-  const found = await query(
-    `SELECT id, pairing_id, status, expires_at
-     FROM desktop_device_sessions
-     WHERE pairing_code = $1
-     LIMIT 1`,
-    [pairingCode]
-  );
+  const found = pairingId
+    ? await query(
+        `SELECT id, pairing_id, status, expires_at
+         FROM desktop_device_sessions
+         WHERE pairing_id = $1
+         LIMIT 1`,
+        [pairingId]
+      )
+    : await query(
+        `SELECT id, pairing_id, status, expires_at
+         FROM desktop_device_sessions
+         WHERE pairing_code = $1
+         LIMIT 1`,
+        [pairingCode]
+      );
 
   if (!found.rows.length) {
-    return { status: 404, payload: { error: 'Pairing code no encontrado' } };
+    return {
+      status: 404,
+      payload: {
+        error: pairingId ? 'Pairing no encontrado' : 'Pairing code no encontrado',
+      },
+    };
   }
 
   const row = found.rows[0];

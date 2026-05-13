@@ -8,6 +8,12 @@ export interface PairingStartResponse {
   approveHint?: string;
 }
 
+export interface PendingDesktopAuth {
+  pairingId: string;
+  pollToken: string;
+  expiresAt: string;
+}
+
 export interface PairingPendingResponse {
   success: boolean;
   status: 'PENDING';

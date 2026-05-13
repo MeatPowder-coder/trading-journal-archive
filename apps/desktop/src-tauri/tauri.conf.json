@@ -27,5 +27,12 @@
   "bundle": {
     "active": false,
     "targets": "all"
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["trading-journal"]
+      }
+    }
   }
 }

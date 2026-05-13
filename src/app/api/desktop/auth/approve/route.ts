@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const result = await approveDesktopPairingCode({
       pairingCode: body?.pairingCode,
+      pairingId: body?.pairingId,
       userId: auth.userId,
       userEmail: auth.email || null,
       userName: auth.name || null,
