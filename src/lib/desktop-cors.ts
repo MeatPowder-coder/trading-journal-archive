@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const DEFAULT_ORIGINS = [
   'tauri://localhost',
+  'http://tauri.localhost',
   'https://tauri.localhost',
   'http://localhost:1420',
   'http://127.0.0.1:1420',
