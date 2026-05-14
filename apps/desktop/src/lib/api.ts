@@ -122,20 +122,34 @@ export async function fetchDesktopSession(params: {
   baseUrl: string;
   accessToken: string;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/desktop/session`, {
-    headers: authHeaders(params.accessToken),
-  });
-  return parseJsonOrThrow<DesktopSessionResponse>(res);
+  try {
+    const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/desktop/session`, {
+      headers: authHeaders(params.accessToken),
+    });
+    return parseJsonOrThrow<DesktopSessionResponse>(res);
+  } catch {
+    const legacy = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/session`, {
+      headers: authHeaders(params.accessToken),
+    });
+    return parseJsonOrThrow<DesktopSessionResponse>(legacy);
+  }
 }
 
 export async function fetchDesktopCockpit(params: {
   baseUrl: string;
   accessToken: string;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/desktop/cockpit`, {
-    headers: authHeaders(params.accessToken),
-  });
-  return parseJsonOrThrow<DesktopCockpitResponse>(res);
+  try {
+    const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/desktop/cockpit`, {
+      headers: authHeaders(params.accessToken),
+    });
+    return parseJsonOrThrow<DesktopCockpitResponse>(res);
+  } catch {
+    const legacy = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/cockpit`, {
+      headers: authHeaders(params.accessToken),
+    });
+    return parseJsonOrThrow<DesktopCockpitResponse>(legacy);
+  }
 }
 
 export async function fetchDesktopBootstrap(params: {
