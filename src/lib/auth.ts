@@ -6,9 +6,13 @@ import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 
 const prisma = new PrismaClient();
+const isProduction = process.env.NODE_ENV === 'production';
 
 export const authOptions: NextAuthOptions = {
     adapter: PrismaAdapter(prisma),
+    secret: process.env.NEXTAUTH_SECRET,
+    // Prevent OAuth state cookies from being marked Secure during local HTTP dev.
+    useSecureCookies: isProduction,
     providers: [
         GoogleProvider({
             clientId: process.env.GOOGLE_CLIENT_ID || '',
