@@ -36,8 +36,8 @@ const aiAnalysisInputSchema = z.object({
   error: z.string().nullable().optional(),
 });
 
-function requireDesktopAuth(request: FastifyRequest, reply: FastifyReply) {
-  const auth = resolveDesktopAuth(request);
+async function requireDesktopAuth(request: FastifyRequest, reply: FastifyReply) {
+  const auth = await resolveDesktopAuth(request);
   if (!auth) {
     reply.code(401).send({ error: 'Desktop access token required' });
     return null;
@@ -47,7 +47,7 @@ function requireDesktopAuth(request: FastifyRequest, reply: FastifyReply) {
 
 export async function registerTradeTrackingRoutes(instance: FastifyInstance) {
   instance.get('/v1/trades/:tradeId/sltp-moves', async (request, reply) => {
-    if (!requireDesktopAuth(request, reply)) return reply;
+    if (!await requireDesktopAuth(request, reply)) return reply;
     const { tradeId } = paramsSchema.parse(request.params);
     const result = await query(
       `SELECT *
@@ -60,7 +60,7 @@ export async function registerTradeTrackingRoutes(instance: FastifyInstance) {
   });
 
   instance.post('/v1/trades/:tradeId/sltp-moves', async (request, reply) => {
-    if (!requireDesktopAuth(request, reply)) return reply;
+    if (!await requireDesktopAuth(request, reply)) return reply;
     const { tradeId } = paramsSchema.parse(request.params);
     const body = sltpMoveInputSchema.parse(request.body);
     const result = await query(
@@ -92,7 +92,7 @@ export async function registerTradeTrackingRoutes(instance: FastifyInstance) {
   });
 
   instance.get('/v1/trades/:tradeId/snapshots', async (request, reply) => {
-    if (!requireDesktopAuth(request, reply)) return reply;
+    if (!await requireDesktopAuth(request, reply)) return reply;
     const { tradeId } = paramsSchema.parse(request.params);
     const result = await query(
       `SELECT *
@@ -105,7 +105,7 @@ export async function registerTradeTrackingRoutes(instance: FastifyInstance) {
   });
 
   instance.post('/v1/trades/:tradeId/snapshots', async (request, reply) => {
-    if (!requireDesktopAuth(request, reply)) return reply;
+    if (!await requireDesktopAuth(request, reply)) return reply;
     const { tradeId } = paramsSchema.parse(request.params);
     const body = snapshotInputSchema.parse(request.body);
     const result = await query(
@@ -134,7 +134,7 @@ export async function registerTradeTrackingRoutes(instance: FastifyInstance) {
   });
 
   instance.get('/v1/trades/:tradeId/ai-analysis', async (request, reply) => {
-    if (!requireDesktopAuth(request, reply)) return reply;
+    if (!await requireDesktopAuth(request, reply)) return reply;
     const { tradeId } = paramsSchema.parse(request.params);
     const result = await query(
       `SELECT *
@@ -147,7 +147,7 @@ export async function registerTradeTrackingRoutes(instance: FastifyInstance) {
   });
 
   instance.post('/v1/trades/:tradeId/ai-analysis', async (request, reply) => {
-    if (!requireDesktopAuth(request, reply)) return reply;
+    if (!await requireDesktopAuth(request, reply)) return reply;
     const { tradeId } = paramsSchema.parse(request.params);
     const body = aiAnalysisInputSchema.parse(request.body);
     const result = await query(

@@ -53,7 +53,7 @@ export interface DesktopSessionResponse {
     approvedAt: string | null;
     exchangedAt: string | null;
     updatedAt: string;
-  };
+  } | null;
 }
 
 export interface DesktopCockpitResponse {
@@ -75,6 +75,26 @@ export interface DesktopCockpitResponse {
   };
   openTrades: Array<Record<string, unknown>>;
   pendingOrders: Array<Record<string, unknown>>;
+}
+
+export interface DesktopBootstrapResponse {
+  success: boolean;
+  asOf: string;
+  session: {
+    authenticated: boolean;
+    user: {
+      id: string;
+      email: string | null;
+      name: string | null;
+    };
+    deviceSession: DesktopSessionResponse['deviceSession'] | null;
+  };
+  cockpit: DesktopCockpitResponse;
+  uiConfig: {
+    defaultSymbol: string;
+    defaultTimeframe: Timeframe;
+    tabs: string[];
+  };
 }
 
 export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d';
@@ -176,4 +196,24 @@ export interface AIAnalysisInput {
   context?: Record<string, unknown>;
   status?: 'PENDING' | 'DONE' | 'ERROR';
   error?: string | null;
+}
+
+export interface ChatSession {
+  id: number;
+  title: string | null;
+  trade_id: number | null;
+  pending_limit_order_id: number | null;
+  created_at: string;
+  updated_at: string;
+  agent_type: string | null;
+  message_count?: number;
+}
+
+export interface ChatMessage {
+  id: number;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+  file_url?: string | null;
+  file_type?: string | null;
+  created_at: string;
 }

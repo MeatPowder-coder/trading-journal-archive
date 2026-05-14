@@ -2,19 +2,21 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { openUrl as openExternalUrl } from '@tauri-apps/plugin-opener';
 import { AIAnalysisPanel } from './components/AIAnalysisPanel';
-import { ChartWorkspace } from './components/ChartWorkspace';
+import { ChatDesk } from './components/ChatDesk';
 import { CVDPanel } from './components/CVDPanel';
 import { FootprintPanel } from './components/FootprintPanel';
 import { JournalSidebar } from './components/JournalSidebar';
 import { LiquidationPanel } from './components/LiquidationPanel';
 import { OrderPanel } from './components/OrderPanel';
 import { RiskHeader } from './components/RiskHeader';
+import { TradingViewChartWorkspace } from './components/TradingViewChartWorkspace';
 import { useBackendEvents } from './hooks/useBackendEvents';
 import { useMarketData } from './hooks/useMarketData';
 import {
   createChartSnapshot,
   createSLTPMove,
   defaultBackendUrl,
+  fetchDesktopBootstrap,
   fetchDesktopCockpit,
   fetchDesktopSession,
   pollDesktopPairing,
@@ -129,6 +131,18 @@ function captureChartImageUrl() {
 }
 
 const timeframes: Timeframe[] = ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d'];
+const desktopTabs = [
+  { id: 'trading-desk', label: 'Trading Desk' },
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'live-market', label: 'Live Market Activity' },
+  { id: 'chat', label: 'Chat' },
+  { id: 'portfolio', label: 'Portfolio' },
+  { id: 'cuentas', label: 'Cuentas' },
+  { id: 'transacciones', label: 'Transacciones' },
+  { id: 'alertas', label: 'Alertas' },
+] as const;
+
+type DesktopTabId = typeof desktopTabs[number]['id'];
 
 export default function App() {
   const [backendUrl, setBackendUrl] = useState(() => getSavedBackendUrl() || defaultBackendUrl());
@@ -139,6 +153,7 @@ export default function App() {
   const [session, setSession] = useState<DesktopSessionResponse | null>(null);
   const [cockpit, setCockpit] = useState<DesktopCockpitResponse | null>(null);
   const [backendEvents, setBackendEvents] = useState<DesktopEvent[]>([]);
+  const [activeTab, setActiveTab] = useState<DesktopTabId>('trading-desk');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [timeframe, setTimeframe] = useState<Timeframe>('1m');
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
@@ -173,13 +188,27 @@ export default function App() {
 
   const loadDesktopState = useCallback(
     async (accessToken: string) => {
-      const [sessionPayload, cockpitPayload] = await Promise.all([
-        fetchDesktopSession({ baseUrl: backendUrl, accessToken }),
-        fetchDesktopCockpit({ baseUrl: backendUrl, accessToken }),
-      ]);
-      setSession(sessionPayload);
-      setCockpit(cockpitPayload);
-      setLastSyncAt(new Date().toISOString());
+      try {
+        const bootstrap = await fetchDesktopBootstrap({ baseUrl: backendUrl, accessToken });
+        setSession(bootstrap.session);
+        setCockpit(bootstrap.cockpit);
+        if (bootstrap.uiConfig?.defaultSymbol) {
+          setSymbol((current) => current || bootstrap.uiConfig.defaultSymbol.toUpperCase());
+        }
+        if (bootstrap.uiConfig?.defaultTimeframe && timeframes.includes(bootstrap.uiConfig.defaultTimeframe)) {
+          setTimeframe((current) => current || bootstrap.uiConfig.defaultTimeframe);
+        }
+        setLastSyncAt(bootstrap.asOf || new Date().toISOString());
+      } catch {
+        // Fallback path while backend bootstrap endpoint is rolling out.
+        const [sessionPayload, cockpitPayload] = await Promise.all([
+          fetchDesktopSession({ baseUrl: backendUrl, accessToken }),
+          fetchDesktopCockpit({ baseUrl: backendUrl, accessToken }),
+        ]);
+        setSession(sessionPayload);
+        setCockpit(cockpitPayload);
+        setLastSyncAt(new Date().toISOString());
+      }
     },
     [backendUrl]
   );
@@ -510,6 +539,7 @@ export default function App() {
 
   const side = readString(activeTrade, 'direccion', 'NO TRADE');
   const entry = readNumber(activeTrade, 'precio_entrada');
+  const activeTradeId = readNumber(activeTrade, 'id');
   const latestPrice = market.summary.latestPrice;
   const unrealizedHint = entry && latestPrice
     ? side === 'SHORT'
@@ -580,36 +610,147 @@ export default function App() {
             </span>
           </section>
 
-          <div className="main-desk">
-            <div className="chart-column">
-              <ChartWorkspace state={market.state} />
-              <div className="lower-panels">
-                <CVDPanel points={market.state.cvd} />
-                <FootprintPanel bins={market.state.footprint} />
-                <LiquidationPanel events={market.state.liquidations} />
-              </div>
-            </div>
-            <aside className="right-rail">
-              <OrderPanel activeTrade={activeTrade} tokens={tokens} onMoveProtection={handleMoveProtection} />
-              <JournalSidebar activeTrade={activeTrade} events={backendEvents} />
-              <AIAnalysisPanel disabled={!activeTrade || !tokens} onRequestAnalysis={handleRequestAnalysis} />
-            </aside>
-          </div>
+          <nav className="workspace-tabs">
+            {desktopTabs.map((tab) => (
+              <button
+                key={tab.id}
+                className={activeTab === tab.id ? 'workspace-tab active' : 'workspace-tab'}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
 
-          <section className="orders-strip">
-            <div>
-              <h3>Open Trades</h3>
-              <p>{openTradesView.length} active</p>
+          {activeTab === 'trading-desk' ? (
+            <div className="main-desk">
+              <div className="chart-column">
+                <TradingViewChartWorkspace state={market.state} />
+                <div className="lower-panels">
+                  <CVDPanel points={market.state.cvd} />
+                  <FootprintPanel bins={market.state.footprint} />
+                  <LiquidationPanel events={market.state.liquidations} />
+                </div>
+              </div>
+              <aside className="right-rail">
+                <OrderPanel activeTrade={activeTrade} tokens={tokens} onMoveProtection={handleMoveProtection} />
+                <JournalSidebar activeTrade={activeTrade} events={backendEvents} />
+                <AIAnalysisPanel disabled={!activeTrade || !tokens} onRequestAnalysis={handleRequestAnalysis} />
+              </aside>
             </div>
-            <div>
-              <h3>Pending Orders</h3>
-              <p>{pendingOrdersView.length} waiting</p>
-            </div>
-            <div>
-              <h3>Risk Warning</h3>
-              <p>{cockpit?.account.maxRisk.warning || 'No warning'}</p>
-            </div>
-          </section>
+          ) : null}
+
+          {activeTab === 'dashboard' ? (
+            <section className="parity-panel">
+              <div className="parity-grid metrics">
+                <article>
+                  <span>Balance USDT</span>
+                  <strong>{formatNumber(cockpit?.account.balanceUsdt)}</strong>
+                </article>
+                <article>
+                  <span>Max Risk</span>
+                  <strong>{formatNumber(cockpit?.account.maxRisk.amount)}</strong>
+                </article>
+                <article>
+                  <span>Open Trades</span>
+                  <strong>{openTradesView.length}</strong>
+                </article>
+                <article>
+                  <span>Pending Orders</span>
+                  <strong>{pendingOrdersView.length}</strong>
+                </article>
+              </div>
+              <div className="parity-grid two-cols">
+                <article className="parity-card">
+                  <h3>Open Trades</h3>
+                  <div className="mini-table">
+                    <div><b>ID</b><b>Symbol</b><b>Side</b><b>Entry</b><b>Status</b></div>
+                    {openTradesView.slice(0, 12).map((trade) => (
+                      <div key={readString(trade, 'id', Math.random().toString())}>
+                        <span>#{readString(trade, 'id')}</span>
+                        <span>{readString(trade, 'simbolo')}</span>
+                        <span>{readString(trade, 'direccion')}</span>
+                        <span>{readString(trade, 'precio_entrada')}</span>
+                        <span>{readString(trade, 'estado')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+                <article className="parity-card">
+                  <h3>Pending Limits</h3>
+                  <div className="mini-table">
+                    <div><b>ID</b><b>Symbol</b><b>Side</b><b>Entry</b><b>Status</b></div>
+                    {pendingOrdersView.slice(0, 12).map((order) => (
+                      <div key={readString(order, 'id', Math.random().toString())}>
+                        <span>#{readString(order, 'id')}</span>
+                        <span>{readString(order, 'simbolo')}</span>
+                        <span>{readString(order, 'direccion')}</span>
+                        <span>{readString(order, 'entry_price')}</span>
+                        <span>{readString(order, 'order_status')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </div>
+            </section>
+          ) : null}
+
+          {activeTab === 'live-market' ? (
+            <section className="live-market-layout">
+              <div className="chart-column">
+                <TradingViewChartWorkspace state={market.state} />
+                <div className="lower-panels">
+                  <CVDPanel points={market.state.cvd} />
+                  <FootprintPanel bins={market.state.footprint} />
+                  <LiquidationPanel events={market.state.liquidations} />
+                </div>
+              </div>
+              <article className="side-card">
+                <div className="card-title-row">
+                  <h3>Backend Events</h3>
+                  <span className="tag">WSS</span>
+                </div>
+                <div className="event-list">
+                  {backendEvents.slice(-24).reverse().map((event, index) => (
+                    <article key={`${event.timestamp}-${index}`}>
+                      <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
+                      <b>{event.type}</b>
+                      <small>{readString(event.payload as Record<string, unknown>, 'source', '-')}</small>
+                    </article>
+                  ))}
+                  {!backendEvents.length ? <p className="muted">Waiting for live events...</p> : null}
+                </div>
+              </article>
+            </section>
+          ) : null}
+
+          {activeTab === 'chat' ? (
+            <ChatDesk backendUrl={backendUrl} tokens={tokens} activeTradeId={activeTradeId} />
+          ) : null}
+
+          {['portfolio', 'cuentas', 'transacciones', 'alertas'].includes(activeTab) ? (
+            <section className="placeholder-workspace">
+              <h3>{desktopTabs.find((tab) => tab.id === activeTab)?.label}</h3>
+              <p>
+                Esta vista queda conectada al mismo backend desktop y será movida a paridad completa con los módulos web
+                en los siguientes commits del plan.
+              </p>
+              <div className="orders-strip">
+                <div>
+                  <h3>Open Trades</h3>
+                  <p>{openTradesView.length} active</p>
+                </div>
+                <div>
+                  <h3>Pending Orders</h3>
+                  <p>{pendingOrdersView.length} waiting</p>
+                </div>
+                <div>
+                  <h3>Risk Warning</h3>
+                  <p>{cockpit?.account.maxRisk.warning || 'No warning'}</p>
+                </div>
+              </div>
+            </section>
+          ) : null}
         </main>
       )}
     </div>

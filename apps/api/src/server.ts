@@ -4,6 +4,7 @@ import websocket from '@fastify/websocket';
 import { ZodError } from 'zod';
 import { registerDesktopRoutes } from './routes/desktop';
 import { registerTradeTrackingRoutes } from './routes/trade-tracking';
+import { registerDesktopUnifiedRoutes } from './routes/desktop-unified';
 
 function allowedOrigins() {
   const raw = process.env.CORS_ORIGINS || 'http://tauri.localhost,tauri://localhost,http://localhost:1420';
@@ -30,6 +31,7 @@ export async function buildServer() {
   await app.register(websocket);
   await registerDesktopRoutes(app);
   await registerTradeTrackingRoutes(app);
+  await registerDesktopUnifiedRoutes(app);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof ZodError) {
