@@ -1,12 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { openUrl as openExternalUrl } from '@tauri-apps/plugin-opener';
+import { AIAnalysisPanel } from './components/AIAnalysisPanel';
+import { ChartWorkspace } from './components/ChartWorkspace';
+import { CVDPanel } from './components/CVDPanel';
+import { FootprintPanel } from './components/FootprintPanel';
+import { JournalSidebar } from './components/JournalSidebar';
+import { LiquidationPanel } from './components/LiquidationPanel';
+import { OrderPanel } from './components/OrderPanel';
+import { RiskHeader } from './components/RiskHeader';
+import { useBackendEvents } from './hooks/useBackendEvents';
+import { useMarketData } from './hooks/useMarketData';
 import {
+  createChartSnapshot,
+  createSLTPMove,
   defaultBackendUrl,
   fetchDesktopCockpit,
   fetchDesktopSession,
   pollDesktopPairing,
   refreshDesktopTokens,
+  requestAIAnalysis,
   revokeDesktopSession,
   startDesktopPairing,
 } from './lib/api';
@@ -24,10 +37,13 @@ import {
 } from './lib/storage';
 import type {
   DesktopCockpitResponse,
+  DesktopEvent,
   DesktopSessionResponse,
   DesktopTokens,
   PendingDesktopAuth,
   PairingStartResponse,
+  SLTPMoveInput,
+  Timeframe,
 } from './types';
 
 function formatDateIso(iso: string | null | undefined) {
@@ -51,15 +67,15 @@ function detectClientPlatform() {
   return (navigator.platform || 'unknown').toLowerCase();
 }
 
-function readString(row: Record<string, unknown>, key: string, fallback = '-') {
-  const value = row[key];
+function readString(row: Record<string, unknown> | null | undefined, key: string, fallback = '-') {
+  const value = row?.[key];
   if (typeof value === 'string' && value.trim()) return value;
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return fallback;
 }
 
-function readNumber(row: Record<string, unknown>, key: string) {
-  const value = row[key];
+function readNumber(row: Record<string, unknown> | null | undefined, key: string) {
+  const value = row?.[key];
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
     const parsed = Number(value);
@@ -102,54 +118,52 @@ function parsePairingIdFromDeepLink(url: string) {
   }
 }
 
+function captureChartImageUrl() {
+  const canvas = document.querySelector<HTMLCanvasElement>('.candle-chart canvas');
+  if (!canvas) return '';
+  try {
+    return canvas.toDataURL('image/png');
+  } catch {
+    return '';
+  }
+}
+
+const timeframes: Timeframe[] = ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d'];
+
 export default function App() {
   const [backendUrl, setBackendUrl] = useState(() => getSavedBackendUrl() || defaultBackendUrl());
   const [clientName, setClientName] = useState(() => defaultClientName());
   const [pairing, setPairing] = useState<PairingStartResponse | null>(null);
   const [pendingAuth, setPendingAuth] = useState<PendingDesktopAuth | null>(() => getPendingDesktopAuth());
-  const [tokens, setTokens] = useState(() => getTokens());
+  const [tokens, setTokens] = useState<DesktopTokens | null>(null);
   const [session, setSession] = useState<DesktopSessionResponse | null>(null);
   const [cockpit, setCockpit] = useState<DesktopCockpitResponse | null>(null);
+  const [backendEvents, setBackendEvents] = useState<DesktopEvent[]>([]);
+  const [symbol, setSymbol] = useState('BTCUSDT');
+  const [timeframe, setTimeframe] = useState<Timeframe>('1m');
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>('Ready');
 
-  const openTradesView = useMemo(() => {
-    if (!cockpit?.openTrades?.length) return [];
-    return cockpit.openTrades.map((row, index) => {
-      const record = row as Record<string, unknown>;
-      return {
-        key: `${readString(record, 'id', String(index + 1))}-${index}`,
-        id: readString(record, 'id', String(index + 1)),
-        symbol: readString(record, 'simbolo'),
-        side: readString(record, 'direccion'),
-        status: readString(record, 'estado'),
-        broker: readString(record, 'broker'),
-        leverage: readNumber(record, 'apalancamiento'),
-        margin: readNumber(record, 'monto_margin'),
-        risk: readNumber(record, 'risk_amount_usdt'),
-        openedAt: readString(record, 'fecha_apertura'),
-      };
-    });
-  }, [cockpit?.openTrades]);
+  const market = useMarketData(symbol, timeframe, Boolean(tokens?.accessToken));
 
-  const pendingOrdersView = useMemo(() => {
-    if (!cockpit?.pendingOrders?.length) return [];
-    return cockpit.pendingOrders.map((row, index) => {
-      const record = row as Record<string, unknown>;
-      return {
-        key: `${readString(record, 'id', String(index + 1))}-${index}`,
-        id: readString(record, 'id', String(index + 1)),
-        symbol: readString(record, 'simbolo'),
-        side: readString(record, 'direccion'),
-        status: readString(record, 'order_status'),
-        entryPrice: readNumber(record, 'entry_price'),
-        margin: readNumber(record, 'margin'),
-        leverage: readNumber(record, 'leverage'),
-        createdAt: readString(record, 'created_at'),
-      };
-    });
-  }, [cockpit?.pendingOrders]);
+  const handleBackendEvent = useCallback((event: DesktopEvent) => {
+    setBackendEvents((current) => [...current.slice(-80), event]);
+    if (['sltp.move.recorded', 'snapshot.created', 'ai.analysis.ready', 'trade.updated', 'order.updated'].includes(event.type)) {
+      setMessage(event.type);
+    }
+  }, []);
+
+  const backendWsStatus = useBackendEvents({
+    backendUrl,
+    tokens,
+    enabled: Boolean(tokens?.accessToken),
+    onEvent: handleBackendEvent,
+  });
+
+  const openTradesView = useMemo(() => cockpit?.openTrades || [], [cockpit?.openTrades]);
+  const pendingOrdersView = useMemo(() => cockpit?.pendingOrders || [], [cockpit?.pendingOrders]);
+  const activeTrade = openTradesView[0] || null;
 
   const pairingBrowserUrl = useMemo(() => {
     const pairingId = pendingAuth?.pairingId || pairing?.pairingId || '';
@@ -172,20 +186,26 @@ export default function App() {
 
   const rotateTokens = useCallback(
     async (refreshToken: string) => {
-      const rotated = await refreshDesktopTokens({
-        baseUrl: backendUrl,
-        refreshToken,
-      });
-      const next: DesktopTokens = {
-        accessToken: rotated.accessToken,
-        refreshToken: rotated.refreshToken,
-      };
-      saveTokens(next);
+      const rotated = await refreshDesktopTokens({ baseUrl: backendUrl, refreshToken });
+      const next: DesktopTokens = { accessToken: rotated.accessToken, refreshToken: rotated.refreshToken };
+      await saveTokens(next);
       setTokens(next);
       return next;
     },
     [backendUrl]
   );
+
+  useEffect(() => {
+    let disposed = false;
+    async function boot() {
+      const saved = await getTokens();
+      if (!disposed && saved) setTokens(saved);
+    }
+    boot();
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   useEffect(() => {
     saveBackendUrl(backendUrl);
@@ -225,7 +245,7 @@ export default function App() {
           await loadDesktopState(next.accessToken);
           if (!disposed) setMessage('Tokens rotated automatically');
         } catch (refreshError) {
-          clearTokens();
+          await clearTokens();
           setTokens(null);
           setSession(null);
           setCockpit(null);
@@ -283,7 +303,7 @@ export default function App() {
           accessToken: response.accessToken,
           refreshToken: response.refreshToken,
         };
-        saveTokens(nextTokens);
+        await saveTokens(nextTokens);
         setTokens(nextTokens);
         clearPendingDesktopAuth();
         setPendingAuth(null);
@@ -313,7 +333,7 @@ export default function App() {
         const popup = window.open(url, '_blank', 'noopener,noreferrer');
         if (popup) return true;
       } catch {
-        // Ignore and return false.
+        // Browser fallback failed.
       }
       return false;
     }
@@ -345,11 +365,7 @@ export default function App() {
       }
 
       const opened = await openBrowserForPairing(approvalUrl);
-      if (opened) {
-        setMessage('Browser opened. Continue with Google.');
-      } else {
-        setMessage('Could not open browser automatically');
-      }
+      setMessage(opened ? 'Browser opened. Continue with Google.' : 'Could not open browser automatically');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to start login');
     } finally {
@@ -360,11 +376,7 @@ export default function App() {
   async function handleRetryBrowserLogin() {
     if (!pairingBrowserUrl) return;
     const opened = await openBrowserForPairing(pairingBrowserUrl);
-    if (opened) {
-      setMessage('Browser opened. Continue with Google.');
-      return;
-    }
-    setMessage(`Open manually: ${pairingBrowserUrl}`);
+    setMessage(opened ? 'Browser opened. Continue with Google.' : `Open manually: ${pairingBrowserUrl}`);
   }
 
   useEffect(() => {
@@ -384,7 +396,7 @@ export default function App() {
           }
         }
       } catch {
-        // Ignore deep-link startup errors.
+        // Deep-link startup may be unsupported in browser preview.
       }
 
       try {
@@ -409,20 +421,6 @@ export default function App() {
     };
   }, [completePendingPairing]);
 
-  async function handleRotateTokens() {
-    if (!tokens?.refreshToken) return;
-    setBusy(true);
-    try {
-      const next = await rotateTokens(tokens.refreshToken);
-      await loadDesktopState(next.accessToken);
-      setMessage('Tokens rotated');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Token rotation failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleRefreshCockpit() {
     if (!tokens?.accessToken) return;
     setBusy(true);
@@ -440,11 +438,8 @@ export default function App() {
     if (!tokens?.accessToken) return;
     setBusy(true);
     try {
-      await revokeDesktopSession({
-        baseUrl: backendUrl,
-        accessToken: tokens.accessToken,
-      });
-      clearTokens();
+      await revokeDesktopSession({ baseUrl: backendUrl, accessToken: tokens.accessToken });
+      await clearTokens();
       clearPendingDesktopAuth();
       setTokens(null);
       setSession(null);
@@ -460,238 +455,162 @@ export default function App() {
     }
   }
 
+  async function handleMoveProtection(tradeId: string | number, input: SLTPMoveInput) {
+    if (!tokens?.accessToken) return;
+    setBusy(true);
+    try {
+      const move = await createSLTPMove({ baseUrl: backendUrl, accessToken: tokens.accessToken, tradeId, input });
+      const imageUrl = captureChartImageUrl();
+      await createChartSnapshot({
+        baseUrl: backendUrl,
+        accessToken: tokens.accessToken,
+        tradeId,
+        input: {
+          trigger: input.moveType === 'SL' ? 'SL_MOVE' : 'TP_MOVE',
+          imageUrl: imageUrl || `desktop-snapshot://${symbol}/${Date.now()}`,
+          timeframe,
+          indicators: market.captureSnapshot(),
+          sltpMoveId: readNumber(move.move, 'id'),
+        },
+      });
+      await loadDesktopState(tokens.accessToken);
+      setMessage(`${input.moveType} move recorded with snapshot`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Protection move failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRequestAnalysis(prompt: string) {
+    if (!tokens?.accessToken || !activeTrade) return;
+    const tradeId = readString(activeTrade, 'id', '');
+    if (!tradeId) return;
+    try {
+      await requestAIAnalysis({
+        baseUrl: backendUrl,
+        accessToken: tokens.accessToken,
+        tradeId,
+        input: {
+          prompt,
+          model: 'claude-server-side',
+          status: 'PENDING',
+          context: {
+            activeTrade,
+            market: market.captureSnapshot(),
+            recentBackendEvents: backendEvents.slice(-12),
+          },
+        },
+      });
+      setMessage('AI analysis queued');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'AI analysis request failed');
+    }
+  }
+
+  const side = readString(activeTrade, 'direccion', 'NO TRADE');
+  const entry = readNumber(activeTrade, 'precio_entrada');
+  const latestPrice = market.summary.latestPrice;
+  const unrealizedHint = entry && latestPrice
+    ? side === 'SHORT'
+      ? ((entry - latestPrice) / entry) * 100
+      : ((latestPrice - entry) / entry) * 100
+    : null;
+
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div>
+    <div className="terminal-shell">
+      <header className="terminal-topbar">
+        <div className="brand-block">
           <p className="eyebrow">Trading Journal</p>
-          <h1>Desktop Cockpit</h1>
+          <h1>Windows Trading Desk</h1>
         </div>
-        <div className="topbar-right">
+        <div className="symbol-controls">
+          <input value={symbol} onChange={(event) => setSymbol(event.target.value.toUpperCase())} />
+          <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as Timeframe)}>
+            {timeframes.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
+          </select>
+          <button className="btn" onClick={handleRefreshCockpit} disabled={busy || !tokens}>Sync</button>
+          <button className="btn btn-danger" onClick={handleSignOutDevice} disabled={busy || !tokens}>Sign out</button>
+        </div>
+        <div className="status-stack">
           <span className="status-chip">{message}</span>
-          <p className="meta-chip">
-            Last sync: <b>{formatDateIso(lastSyncAt)}</b>
-          </p>
+          <small>Last sync: <b>{formatDateIso(lastSyncAt)}</b></small>
         </div>
       </header>
 
-      <section className="panel">
-        <h2>Desktop Link</h2>
-        <div className="settings-grid">
-          <div>
-            <label>Backend URL</label>
-            <input
-              value={backendUrl}
-              onChange={(event) => setBackendUrl(event.target.value)}
-              placeholder="https://journal.agentame.xyz"
-              className="text-input"
-            />
-          </div>
-          <div>
-            <label>Client Name</label>
-            <input
-              value={clientName}
-              onChange={(event) => setClientName(event.target.value)}
-              placeholder="Trading Journal Desktop"
-              className="text-input"
-            />
-          </div>
-        </div>
-        <div className="actions">
-          <button onClick={handleStartPairing} disabled={busy} className="btn btn-primary">
-            Sign In With Google
-          </button>
-          {pendingAuth && !tokens ? (
-            <button onClick={handleRetryBrowserLogin} disabled={busy} className="btn">
-              Reopen Browser
-            </button>
-          ) : null}
-        </div>
-      </section>
-
-      {(pendingAuth || pairing) && !tokens && (
-        <section className="panel pairing">
-          <h2>Browser Login In Progress</h2>
-          <p className="hint">
-            Complete Google login in your browser. Then accept the prompt to open Trading Journal Desktop.
-          </p>
-          <p className="hint">
-            Expires at: <b>{formatDateIso((pendingAuth || pairing)?.expiresAt)}</b>
-          </p>
-          {pairingBrowserUrl ? (
-            <p className="hint">
-              Browser URL: <code>{pairingBrowserUrl}</code>
+      {!tokens ? (
+        <main className="login-stage">
+          <section className="login-card">
+            <p className="eyebrow">Secure Desktop Login</p>
+            <h2>Connect the Windows app to your journal</h2>
+            <p>
+              Google login opens in your browser and returns here through the Trading Journal deep link.
+              No manual codes are required.
             </p>
-          ) : null}
-          <div className="actions">
-            <button onClick={handleRetryBrowserLogin} disabled={busy || !pairingBrowserUrl} className="btn">
-              Open Browser Again
-            </button>
-          </div>
-        </section>
-      )}
-
-      {tokens && session && (
-        <section className="panel">
-          <h2>Desktop Session</h2>
-          <div className="grid">
-            <div>
-              <label>User</label>
-              <p>{session.user.name || session.user.email || session.user.id}</p>
-            </div>
-            <div>
-              <label>Device</label>
-              <p>{session.deviceSession.clientName || '-'}</p>
-            </div>
-            <div>
-              <label>Platform</label>
-              <p>{session.deviceSession.clientPlatform || '-'}</p>
-            </div>
-            <div>
-              <label>Status</label>
-              <p>{session.deviceSession.status || '-'}</p>
-            </div>
-            <div>
-              <label>Approved At</label>
-              <p>{formatDateIso(session.deviceSession.approvedAt)}</p>
-            </div>
-            <div>
-              <label>Updated At</label>
-              <p>{formatDateIso(session.deviceSession.updatedAt)}</p>
-            </div>
-          </div>
-          <div className="actions">
-            <button onClick={handleRefreshCockpit} disabled={busy} className="btn">
-              Refresh Cockpit
-            </button>
-            <button onClick={handleRotateTokens} disabled={busy} className="btn">
-              Rotate Tokens
-            </button>
-            <button onClick={handleSignOutDevice} disabled={busy} className="btn btn-danger">
-              Revoke Session
-            </button>
-          </div>
-        </section>
-      )}
-
-      {tokens && cockpit && (
-        <>
-          <section className="panel">
-            <h2>Live Cockpit Snapshot</h2>
-            <div className="kpi-grid">
-              <article className="kpi">
-                <label>Balance USDT</label>
-                <strong>{formatNumber(cockpit.account.balanceUsdt, 2)}</strong>
-              </article>
-              <article className="kpi">
-                <label>Max Risk USDT</label>
-                <strong>{formatNumber(cockpit.account.maxRisk.amount, 2)}</strong>
-              </article>
-              <article className="kpi">
-                <label>Open Trades</label>
-                <strong>{openTradesView.length}</strong>
-              </article>
-              <article className="kpi">
-                <label>Pending Orders</label>
-                <strong>{pendingOrdersView.length}</strong>
-              </article>
-              <article className="kpi">
-                <label>Blocked</label>
-                <strong>{cockpit.discipline.blocked ? 'Yes' : 'No'}</strong>
-              </article>
-              <article className="kpi">
-                <label>Blocked Until</label>
-                <strong>{formatDateIso(cockpit.discipline.blockedUntil)}</strong>
-              </article>
-              <article className="kpi">
-                <label>Remaining Sec</label>
-                <strong>{cockpit.discipline.remainingSeconds || 0}</strong>
-              </article>
-              <article className="kpi">
-                <label>As Of</label>
-                <strong>{formatDateIso(cockpit.asOf)}</strong>
-              </article>
-            </div>
-          </section>
-
-          <section className="panel">
-            <h2>Open Trades</h2>
-            {openTradesView.length === 0 ? (
-              <p className="hint">No open trades.</p>
-            ) : (
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Symbol</th>
-                      <th>Side</th>
-                      <th>Status</th>
-                      <th>Broker</th>
-                      <th>Lev</th>
-                      <th>Margin</th>
-                      <th>Risk</th>
-                      <th>Opened</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {openTradesView.map((row) => (
-                      <tr key={row.key}>
-                        <td>{row.id}</td>
-                        <td>{row.symbol}</td>
-                        <td>{row.side}</td>
-                        <td>{row.status}</td>
-                        <td>{row.broker}</td>
-                        <td>{formatNumber(row.leverage, 1)}</td>
-                        <td>{formatNumber(row.margin, 2)}</td>
-                        <td>{formatNumber(row.risk, 2)}</td>
-                        <td>{formatDateIso(row.openedAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="settings-grid">
+              <div>
+                <label>Backend URL</label>
+                <input value={backendUrl} onChange={(event) => setBackendUrl(event.target.value)} className="text-input" />
               </div>
-            )}
+              <div>
+                <label>Client Name</label>
+                <input value={clientName} onChange={(event) => setClientName(event.target.value)} className="text-input" />
+              </div>
+            </div>
+            <div className="actions">
+              <button onClick={handleStartPairing} disabled={busy} className="btn btn-primary">Sign In With Google</button>
+              {pendingAuth ? <button onClick={handleRetryBrowserLogin} disabled={busy} className="btn">Reopen Browser</button> : null}
+            </div>
+            {pendingAuth || pairing ? (
+              <p className="muted">Login expires at {formatDateIso((pendingAuth || pairing)?.expiresAt)}</p>
+            ) : null}
+          </section>
+        </main>
+      ) : (
+        <main className="trading-grid">
+          <RiskHeader cockpit={cockpit} marketStatus={market.status} backendStatus={backendWsStatus} />
+
+          <section className="session-strip">
+            <span>{session?.user.name || session?.user.email || 'Desktop session'}</span>
+            <b>{side}</b>
+            <span>Entry {formatNumber(entry, 4)}</span>
+            <span>Mark {formatNumber(latestPrice, 4)}</span>
+            <span className={Number(unrealizedHint) >= 0 ? 'positive' : 'negative'}>
+              PnL hint {formatNumber(unrealizedHint, 2)}%
+            </span>
           </section>
 
-          <section className="panel">
-            <h2>Pending Orders</h2>
-            {pendingOrdersView.length === 0 ? (
-              <p className="hint">No pending orders.</p>
-            ) : (
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Symbol</th>
-                      <th>Side</th>
-                      <th>Status</th>
-                      <th>Entry</th>
-                      <th>Margin</th>
-                      <th>Lev</th>
-                      <th>Created</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingOrdersView.map((row) => (
-                      <tr key={row.key}>
-                        <td>{row.id}</td>
-                        <td>{row.symbol}</td>
-                        <td>{row.side}</td>
-                        <td>{row.status}</td>
-                        <td>{formatNumber(row.entryPrice, 4)}</td>
-                        <td>{formatNumber(row.margin, 2)}</td>
-                        <td>{formatNumber(row.leverage, 1)}</td>
-                        <td>{formatDateIso(row.createdAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          <div className="main-desk">
+            <div className="chart-column">
+              <ChartWorkspace state={market.state} />
+              <div className="lower-panels">
+                <CVDPanel points={market.state.cvd} />
+                <FootprintPanel bins={market.state.footprint} />
+                <LiquidationPanel events={market.state.liquidations} />
               </div>
-            )}
+            </div>
+            <aside className="right-rail">
+              <OrderPanel activeTrade={activeTrade} tokens={tokens} onMoveProtection={handleMoveProtection} />
+              <JournalSidebar activeTrade={activeTrade} events={backendEvents} />
+              <AIAnalysisPanel disabled={!activeTrade || !tokens} onRequestAnalysis={handleRequestAnalysis} />
+            </aside>
+          </div>
+
+          <section className="orders-strip">
+            <div>
+              <h3>Open Trades</h3>
+              <p>{openTradesView.length} active</p>
+            </div>
+            <div>
+              <h3>Pending Orders</h3>
+              <p>{pendingOrdersView.length} waiting</p>
+            </div>
+            <div>
+              <h3>Risk Warning</h3>
+              <p>{cockpit?.account.maxRisk.warning || 'No warning'}</p>
+            </div>
           </section>
-        </>
+        </main>
       )}
     </div>
   );
