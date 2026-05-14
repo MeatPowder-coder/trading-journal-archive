@@ -253,3 +253,116 @@
     transform: scale(1);
   }
 }
+
+.journal-parity {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  background: rgba(9, 9, 11, 0.94);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.journal-parity-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.journal-parity-title h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: rgb(250, 250, 250);
+}
+
+.journal-parity-title span {
+  color: rgb(161, 161, 170);
+  font-size: 0.76rem;
+}
+
+.journal-parity-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.journal-parity-metrics article,
+.journal-parity-card {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(24, 24, 27, 0.88);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.journal-parity-metrics span {
+  display: block;
+  color: rgb(161, 161, 170);
+  font-size: 0.74rem;
+  margin-bottom: 4px;
+}
+
+.journal-parity-metrics strong {
+  color: rgb(244, 244, 245);
+  font-size: 1.02rem;
+}
+
+.journal-parity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.journal-parity-card h4 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: rgb(244, 244, 245);
+}
+
+.journal-parity-table {
+  display: grid;
+  gap: 6px;
+}
+
+.journal-parity-head,
+.journal-parity-row {
+  display: grid;
+  grid-template-columns: 64px minmax(84px, 1fr) 84px 110px 110px;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.journal-parity-head {
+  color: rgb(161, 161, 170);
+}
+
+.journal-parity-row {
+  color: rgb(228, 228, 231);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 6px;
+}
+
+.journal-parity-empty {
+  margin: 0;
+  color: rgb(161, 161, 170);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 1180px) {
+  .journal-parity-metrics,
+  .journal-parity-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .journal-parity-metrics,
+  .journal-parity-grid {
+    grid-template-columns: 1fr;
+  }
+  .journal-parity-head,
+  .journal-parity-row {
+    grid-template-columns: 64px 1fr 76px 90px 90px;
+    font-size: 0.74rem;
+  }
+}

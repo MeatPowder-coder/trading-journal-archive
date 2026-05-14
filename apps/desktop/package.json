@@ -11,6 +11,8 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
+    "@trading-journal/journal-data": "workspace:*",
+    "@trading-journal/journal-ui": "workspace:*",
     "@tauri-apps/plugin-deep-link": "^2.4.5",
     "@tauri-apps/plugin-opener": "^2.4.0",
     "lightweight-charts": "^4.2.3",

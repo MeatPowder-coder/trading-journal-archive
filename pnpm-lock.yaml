@@ -50,6 +50,12 @@ importers:
       '@radix-ui/react-tabs':
         specifier: ^1.1.13
         version: 1.1.13(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@trading-journal/journal-data':
+        specifier: workspace:*
+        version: link:packages/journal-data
+      '@trading-journal/journal-ui':
+        specifier: workspace:*
+        version: link:packages/journal-ui
       '@types/pg':
         specifier: ^8.16.0
         version: 8.20.0
@@ -199,6 +205,12 @@ importers:
       '@tauri-apps/plugin-opener':
         specifier: ^2.4.0
         version: 2.5.4
+      '@trading-journal/journal-data':
+        specifier: workspace:*
+        version: link:../../packages/journal-data
+      '@trading-journal/journal-ui':
+        specifier: workspace:*
+        version: link:../../packages/journal-ui
       lightweight-charts:
         specifier: ^4.2.3
         version: 4.2.3
@@ -255,6 +267,28 @@ importers:
       prisma:
         specifier: ^6.19.0
         version: 6.19.3(typescript@5.9.3)
+      typescript:
+        specifier: ^5.4.5
+        version: 5.9.3
+
+  packages/journal-data:
+    devDependencies:
+      typescript:
+        specifier: ^5.4.5
+        version: 5.9.3
+
+  packages/journal-ui:
+    dependencies:
+      '@trading-journal/journal-data':
+        specifier: workspace:*
+        version: link:../journal-data
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 18.3.1
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.3
+        version: 18.3.28
       typescript:
         specifier: ^5.4.5
         version: 5.9.3

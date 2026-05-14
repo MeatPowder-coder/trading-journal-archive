@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { openUrl as openExternalUrl } from '@tauri-apps/plugin-opener';
+import { buildDashboardSnapshotFromDesktop } from '@trading-journal/journal-data';
+import { JournalDashboardParity } from '@trading-journal/journal-ui';
 import { AIAnalysisPanel } from './components/AIAnalysisPanel';
 import { ChatDesk } from './components/ChatDesk';
 import { CVDPanel } from './components/CVDPanel';
@@ -13,12 +15,15 @@ import { TradingViewChartWorkspace } from './components/TradingViewChartWorkspac
 import { useBackendEvents } from './hooks/useBackendEvents';
 import { useMarketData } from './hooks/useMarketData';
 import {
+  closePosition,
   createChartSnapshot,
   createSLTPMove,
   defaultBackendUrl,
   fetchDesktopBootstrap,
   fetchDesktopCockpit,
   fetchDesktopSession,
+  placeLimitOrder,
+  placeMarketOrder,
   pollDesktopPairing,
   refreshDesktopTokens,
   requestAIAnalysis,
@@ -210,6 +215,7 @@ export default function App() {
 
   const openTradesView = useMemo(() => cockpit?.openTrades || [], [cockpit?.openTrades]);
   const pendingOrdersView = useMemo(() => cockpit?.pendingOrders || [], [cockpit?.pendingOrders]);
+  const dashboardSnapshot = useMemo(() => buildDashboardSnapshotFromDesktop(cockpit || null), [cockpit]);
   const activeTrade = openTradesView[0] || null;
   const symbolOptions = useMemo(() => {
     const list = marketSymbols[marketType];
@@ -563,6 +569,77 @@ export default function App() {
     }
   }
 
+  async function handlePlaceOrder(input: {
+    orderType: 'MARKET' | 'LIMIT';
+    side: 'LONG' | 'SHORT';
+    leverage: number;
+    margin: number;
+    entryPrice?: number;
+    stopLoss?: number;
+    takeProfit?: number;
+  }) {
+    if (!tokens?.accessToken) return;
+    setBusy(true);
+    try {
+      const payload = {
+        symbol,
+        side: input.side,
+        leverage: input.leverage,
+        margin: input.margin,
+        stopLoss: input.stopLoss,
+        takeProfit: input.takeProfit,
+        timeframe,
+      };
+
+      if (input.orderType === 'MARKET') {
+        await placeMarketOrder({
+          baseUrl: backendUrl,
+          accessToken: tokens.accessToken,
+          body: payload,
+        });
+      } else {
+        await placeLimitOrder({
+          baseUrl: backendUrl,
+          accessToken: tokens.accessToken,
+          body: {
+            ...payload,
+            entryPrice: input.entryPrice,
+            stopLoss: input.stopLoss,
+          },
+        });
+      }
+
+      await loadDesktopState(tokens.accessToken);
+      setMessage(`${input.orderType} ${input.side} submitted for ${symbol}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Order submission failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCloseActivePosition() {
+    if (!tokens?.accessToken || !activeTrade) return;
+    const tradeSymbol = readString(activeTrade, 'simbolo', symbol);
+    const tradeIdNumeric = readNumber(activeTrade, 'id');
+    setBusy(true);
+    try {
+      await closePosition({
+        baseUrl: backendUrl,
+        accessToken: tokens.accessToken,
+        symbol: tradeSymbol,
+        tradeId: tradeIdNumeric ?? undefined,
+        closePercent: 100,
+      });
+      await loadDesktopState(tokens.accessToken);
+      setMessage(`Close submitted for ${tradeSymbol}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Close position failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleRequestAnalysis(prompt: string) {
     if (!tokens?.accessToken || !activeTrade) return;
     const tradeId = readString(activeTrade, 'id', '');
@@ -705,7 +782,13 @@ export default function App() {
                 ) : null}
               </div>
               <aside className="right-rail">
-                <OrderPanel activeTrade={activeTrade} tokens={tokens} onMoveProtection={handleMoveProtection} />
+                <OrderPanel
+                  activeTrade={activeTrade}
+                  tokens={tokens}
+                  onMoveProtection={handleMoveProtection}
+                  onPlaceOrder={handlePlaceOrder}
+                  onCloseActivePosition={handleCloseActivePosition}
+                />
                 <JournalSidebar activeTrade={activeTrade} events={backendEvents} />
                 <AIAnalysisPanel disabled={!activeTrade || !tokens} onRequestAnalysis={handleRequestAnalysis} />
               </aside>
@@ -714,56 +797,7 @@ export default function App() {
 
           {activeTab === 'dashboard' ? (
             <section className="parity-panel">
-              <div className="parity-grid metrics">
-                <article>
-                  <span>Balance USDT</span>
-                  <strong>{formatNumber(cockpit?.account.balanceUsdt)}</strong>
-                </article>
-                <article>
-                  <span>Max Risk</span>
-                  <strong>{formatNumber(cockpit?.account.maxRisk.amount)}</strong>
-                </article>
-                <article>
-                  <span>Open Trades</span>
-                  <strong>{openTradesView.length}</strong>
-                </article>
-                <article>
-                  <span>Pending Orders</span>
-                  <strong>{pendingOrdersView.length}</strong>
-                </article>
-              </div>
-              <div className="parity-grid two-cols">
-                <article className="parity-card">
-                  <h3>Open Trades</h3>
-                  <div className="mini-table">
-                    <div><b>ID</b><b>Symbol</b><b>Side</b><b>Entry</b><b>Status</b></div>
-                    {openTradesView.slice(0, 12).map((trade) => (
-                      <div key={readString(trade, 'id', Math.random().toString())}>
-                        <span>#{readString(trade, 'id')}</span>
-                        <span>{readString(trade, 'simbolo')}</span>
-                        <span>{readString(trade, 'direccion')}</span>
-                        <span>{readString(trade, 'precio_entrada')}</span>
-                        <span>{readString(trade, 'estado')}</span>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-                <article className="parity-card">
-                  <h3>Pending Limits</h3>
-                  <div className="mini-table">
-                    <div><b>ID</b><b>Symbol</b><b>Side</b><b>Entry</b><b>Status</b></div>
-                    {pendingOrdersView.slice(0, 12).map((order) => (
-                      <div key={readString(order, 'id', Math.random().toString())}>
-                        <span>#{readString(order, 'id')}</span>
-                        <span>{readString(order, 'simbolo')}</span>
-                        <span>{readString(order, 'direccion')}</span>
-                        <span>{readString(order, 'entry_price')}</span>
-                        <span>{readString(order, 'order_status')}</span>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              </div>
+              <JournalDashboardParity snapshot={dashboardSnapshot} title="Desktop Journal Snapshot" />
             </section>
           ) : null}
 
@@ -809,20 +843,7 @@ export default function App() {
                 Esta vista queda conectada al mismo backend desktop y será movida a paridad completa con los módulos web
                 en los siguientes commits del plan.
               </p>
-              <div className="orders-strip">
-                <div>
-                  <h3>Open Trades</h3>
-                  <p>{openTradesView.length} active</p>
-                </div>
-                <div>
-                  <h3>Pending Orders</h3>
-                  <p>{pendingOrdersView.length} waiting</p>
-                </div>
-                <div>
-                  <h3>Risk Warning</h3>
-                  <p>{cockpit?.account.maxRisk.warning || 'No warning'}</p>
-                </div>
-              </div>
+              <JournalDashboardParity snapshot={dashboardSnapshot} title="Shared Journal Module Preview" />
             </section>
           ) : null}
         </main>
