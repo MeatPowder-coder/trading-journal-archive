@@ -141,51 +141,139 @@ async function generateAssistantReply(params: {
   userMessage: string;
   history: Array<{ role: string; content: string }>;
 }) {
-  const anthropicKey = (process.env.ANTHROPIC_API_KEY || '').trim();
-  if (!anthropicKey) {
+  const modelAliases: Record<string, string> = {
+    'gemini-3-flash-preview': 'gemini-2.5-flash',
+    'gemini-3.1-flash-lite-preview': 'gemini-2.5-flash-lite',
+  };
+
+  const requestedModel = params.model || 'gemini-2.5-flash-lite';
+  const normalizedModel = requestedModel.toLowerCase().includes('claude')
+    ? 'gemini-2.5-flash-lite'
+    : (modelAliases[requestedModel] || requestedModel);
+  const kimiModel = (process.env.KIMI_MODEL_ID || 'moonshotai/kimi-k2.5').trim();
+
+  const compactHistory = params.history
+    .slice(-16)
+    .map((message) => ({
+      role: message.role === 'assistant' ? 'assistant' : 'user',
+      content: String(message.content || ''),
+    }))
+    .filter((message) => message.content.trim().length > 0);
+
+  const openAiMessages = [
+    { role: 'system', content: params.systemPrompt },
+    ...compactHistory,
+    { role: 'user', content: params.userMessage },
+  ];
+
+  const chatCompletionRequest = async (config: {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+  }) => {
+    const response = await fetch(`${config.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: openAiMessages,
+        temperature: 0.35,
+      }),
+    });
+
+    const payload = await response.json().catch(() => null as any);
+    if (!response.ok) {
+      const details = payload?.error?.message || payload?.error || `HTTP ${response.status}`;
+      throw new Error(`AI provider error: ${details}`);
+    }
+
+    const text = String(payload?.choices?.[0]?.message?.content || '').trim();
+    return text || 'Sin contenido de texto en la respuesta del modelo.';
+  };
+
+  if (normalizedModel === 'kimi-k2.5' || normalizedModel === kimiModel) {
+    const nvidiaApiKey = (process.env.NVIDIA_API_KEY || '').trim();
+    if (!nvidiaApiKey) {
+      return {
+        text: 'NVIDIA_API_KEY no está configurada para usar Kimi.',
+        model: 'missing-nvidia-key',
+      };
+    }
+
+    const text = await chatCompletionRequest({
+      baseUrl: (process.env.NVIDIA_API_BASE_URL || 'https://integrate.api.nvidia.com/v1').trim(),
+      apiKey: nvidiaApiKey,
+      model: kimiModel,
+    });
+    return { text, model: 'kimi-k2.5' };
+  }
+
+  if (normalizedModel.startsWith('gpt-')) {
+    const openAiKey = (process.env.OPENAI_API_KEY || '').trim();
+    if (!openAiKey) {
+      return {
+        text: 'OPENAI_API_KEY no está configurada para usar modelos GPT.',
+        model: 'missing-openai-key',
+      };
+    }
+
+    const text = await chatCompletionRequest({
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: openAiKey,
+      model: normalizedModel,
+    });
+    return { text, model: normalizedModel };
+  }
+
+  const googleApiKey = (process.env.GOOGLE_GENERATIVE_AI_API_KEY || '').trim();
+  if (!googleApiKey) {
     return {
-      text: `No hay ANTHROPIC_API_KEY configurada en el backend. Mensaje recibido: "${params.userMessage.slice(0, 240)}"`,
-      model: 'fallback-local',
+      text: 'GOOGLE_GENERATIVE_AI_API_KEY no está configurada para chat desktop.',
+      model: 'missing-google-key',
     };
   }
 
-  const content = [
-    ...params.history.slice(-14).map((message) => `${message.role.toUpperCase()}: ${message.content}`),
-    `USER: ${params.userMessage}`,
-  ].join('\n\n');
+  const geminiContents = [
+    ...compactHistory.map((message) => ({
+      role: message.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: message.content }],
+    })),
+    { role: 'user', parts: [{ text: params.userMessage }] },
+  ];
 
-  const model = params.model || 'claude-sonnet-4-20250514';
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': anthropicKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1200,
-      system: params.systemPrompt,
-      messages: [{ role: 'user', content }],
-    }),
-  });
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(normalizedModel)}:generateContent?key=${encodeURIComponent(googleApiKey)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: params.systemPrompt }],
+        },
+        contents: geminiContents,
+      }),
+    }
+  );
 
   const payload = await response.json().catch(() => null as any);
   if (!response.ok) {
     const details = payload?.error?.message || payload?.error || `HTTP ${response.status}`;
-    throw new Error(`Claude API error: ${details}`);
+    throw new Error(`Gemini API error: ${details}`);
   }
 
-  const text = Array.isArray(payload?.content)
-    ? payload.content
-        .filter((block: any) => block?.type === 'text' && typeof block?.text === 'string')
-        .map((block: any) => block.text)
+  const text = Array.isArray(payload?.candidates?.[0]?.content?.parts)
+    ? payload.candidates[0].content.parts
+        .map((part: any) => String(part?.text || ''))
         .join('\n')
+        .trim()
     : '';
 
   return {
     text: text || 'Sin contenido de texto en la respuesta del modelo.',
-    model,
+    model: normalizedModel,
   };
 }
 
@@ -497,7 +585,7 @@ export async function registerDesktopUnifiedRoutes(instance: FastifyInstance) {
     );
 
     const modelResult = await generateAssistantReply({
-      model: body.model || 'claude-sonnet-4-20250514',
+      model: body.model || 'gemini-3.1-flash-lite-preview',
       systemPrompt: 'Eres el asistente de trading del usuario. Responde en español, directo y accionable.',
       userMessage: body.message,
       history: historyRes.rows.map((row) => ({

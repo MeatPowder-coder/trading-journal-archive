@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import type { TradingWorkspaceState } from '../types';
+import type { MarketType, TradingWorkspaceState } from '../types';
 
 declare global {
   interface Window {
@@ -23,6 +23,11 @@ function toTvInterval(timeframe: string) {
   }
 }
 
+function toTvSymbol(symbol: string, marketType: MarketType) {
+  if (marketType === 'futures') return `BINANCE:${symbol}.P`;
+  return `BINANCE:${symbol}`;
+}
+
 function loadTradingViewScript() {
   if (window.TradingView) return Promise.resolve();
 
@@ -41,7 +46,13 @@ function formatPrice(value: number | null | undefined) {
   return value >= 100 ? value.toFixed(2) : value.toFixed(5);
 }
 
-export function TradingViewChartWorkspace({ state }: { state: TradingWorkspaceState }) {
+export function TradingViewChartWorkspace({
+  state,
+  active,
+}: {
+  state: TradingWorkspaceState;
+  active?: boolean;
+}) {
   const widgetId = useMemo(() => `tv-widget-${state.symbol.toLowerCase()}-${state.timeframe}`, [state.symbol, state.timeframe]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const latest = state.candles[state.candles.length - 1] || null;
@@ -63,7 +74,7 @@ export function TradingViewChartWorkspace({ state }: { state: TradingWorkspaceSt
       // Advanced chart style with drawing tools and indicator support.
       new window.TradingView.widget({
         autosize: true,
-        symbol: `BINANCE:${state.symbol}`,
+        symbol: toTvSymbol(state.symbol, state.marketType),
         interval: toTvInterval(state.timeframe),
         timezone: 'Etc/UTC',
         theme: 'dark',
@@ -77,20 +88,30 @@ export function TradingViewChartWorkspace({ state }: { state: TradingWorkspaceSt
         save_image: true,
         studies: ['Volume@tv-basicstudies'],
       });
+
+      // TradingView sometimes needs a manual resize pulse on first mount.
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 420);
     }
 
     mountWidget().catch(() => undefined);
     return () => {
       disposed = true;
     };
-  }, [state.symbol, state.timeframe, widgetId]);
+  }, [state.marketType, state.symbol, state.timeframe, widgetId]);
+
+  useEffect(() => {
+    if (!active) return;
+    const id = setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
+    return () => clearTimeout(id);
+  }, [active]);
 
   return (
     <section className="chart-shell">
       <div className="chart-head">
         <div>
           <p className="eyebrow">Trading Desk</p>
-          <h2>{state.symbol} <span>{state.timeframe}</span></h2>
+          <h2>{state.symbol} <span>{state.timeframe} · {state.marketType === 'futures' ? 'Futures' : 'Spot'}</span></h2>
         </div>
         <div className="price-stack">
           <span>Last</span>

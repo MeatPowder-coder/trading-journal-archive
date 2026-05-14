@@ -5,6 +5,7 @@ import type {
   CvdPoint,
   FootprintBin,
   LiquidationEvent,
+  MarketType,
   MarketAggTrade,
   MarketCandle,
   Timeframe,
@@ -20,17 +21,17 @@ function trim<T>(items: T[], max: number) {
   return items.length > max ? items.slice(items.length - max) : items;
 }
 
-function createInitialState(symbol: string, timeframe: Timeframe): TradingWorkspaceState {
-  return { symbol, timeframe, candles: [], cvd: [], footprint: [], liquidations: [] };
+function createInitialState(symbol: string, timeframe: Timeframe, marketType: MarketType): TradingWorkspaceState {
+  return { symbol, marketType, timeframe, candles: [], cvd: [], footprint: [], liquidations: [] };
 }
 
-export function useMarketData(symbol: string, timeframe: Timeframe, enabled: boolean) {
-  const [state, setState] = useState<TradingWorkspaceState>(() => createInitialState(symbol, timeframe));
+export function useMarketData(symbol: string, timeframe: Timeframe, marketType: MarketType, enabled: boolean) {
+  const [state, setState] = useState<TradingWorkspaceState>(() => createInitialState(symbol, timeframe, marketType));
   const [status, setStatus] = useState('Market stream idle');
 
   useEffect(() => {
-    setState(createInitialState(symbol, timeframe));
-  }, [symbol, timeframe]);
+    setState(createInitialState(symbol, timeframe, marketType));
+  }, [symbol, timeframe, marketType]);
 
   useEffect(() => {
     if (!enabled) {
@@ -88,8 +89,8 @@ export function useMarketData(symbol: string, timeframe: Timeframe, enabled: boo
           }));
         }));
 
-        await invoke('subscribe_market_data', { symbol, timeframe });
-        if (!disposed) setStatus(`Live ${symbol} ${timeframe}`);
+        await invoke('subscribe_market_data', { symbol, timeframe, marketType });
+        if (!disposed) setStatus(`Live ${symbol} ${timeframe} ${marketType === 'futures' ? 'Futures' : 'Spot'}`);
       } catch (error) {
         if (!disposed) setStatus(error instanceof Error ? error.message : 'Market stream unavailable');
       }
@@ -100,9 +101,9 @@ export function useMarketData(symbol: string, timeframe: Timeframe, enabled: boo
     return () => {
       disposed = true;
       for (const unlisten of unlisteners) unlisten();
-      invoke('unsubscribe_market_data', { symbol }).catch(() => undefined);
+      invoke('unsubscribe_market_data', { symbol, marketType }).catch(() => undefined);
     };
-  }, [enabled, symbol, timeframe]);
+  }, [enabled, marketType, symbol, timeframe]);
 
   const latestCandle = state.candles[state.candles.length - 1] || null;
   const latestCvd = state.cvd[state.cvd.length - 1] || null;
@@ -116,6 +117,7 @@ export function useMarketData(symbol: string, timeframe: Timeframe, enabled: boo
 
   const captureSnapshot = useCallback(() => ({
     symbol,
+    marketType,
     timeframe,
     asOf: new Date().toISOString(),
     latestPrice: latestCandle?.close ?? null,
@@ -123,7 +125,7 @@ export function useMarketData(symbol: string, timeframe: Timeframe, enabled: boo
     candles: state.candles.slice(-50),
     footprint: state.footprint.slice(-120),
     liquidations: state.liquidations.slice(-30),
-  }), [latestCandle?.close, latestCvd?.cumulative, state.candles, state.footprint, state.liquidations, symbol, timeframe]);
+  }), [latestCandle?.close, latestCvd?.cumulative, marketType, state.candles, state.footprint, state.liquidations, symbol, timeframe]);
 
   return { state, status, summary, captureSnapshot };
 }

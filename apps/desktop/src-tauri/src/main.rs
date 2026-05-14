@@ -21,6 +21,21 @@ struct MarketMemory {
   footprint: Mutex<HashMap<String, FootprintBin>>,
 }
 
+#[derive(Clone, Copy)]
+enum MarketType {
+  Futures,
+  Spot,
+}
+
+impl MarketType {
+  fn from_input(value: &str) -> Self {
+    match value.trim().to_lowercase().as_str() {
+      "spot" => MarketType::Spot,
+      _ => MarketType::Futures,
+    }
+  }
+}
+
 #[derive(Clone, Serialize)]
 struct MarketCandle {
   symbol: String,
@@ -168,13 +183,23 @@ fn emit_agg_trade(app: &AppHandle, memory: &MarketMemory, trade: MarketAggTrade,
   let _ = app.emit("market:footprint", footprint);
 }
 
-async fn listen_market_stream(app: AppHandle, symbol: String, timeframe: String) {
+async fn listen_market_stream(app: AppHandle, symbol: String, timeframe: String, market_type: MarketType) {
   let lower = symbol.to_lowercase();
-  let streams = format!(
-    "{}@kline_{}/{}@aggTrade/{}@forceOrder",
-    lower, timeframe, lower, lower
-  );
-  let url = format!("wss://fstream.binance.com/stream?streams={}", streams);
+  let streams = match market_type {
+    MarketType::Futures => format!(
+      "{}@kline_{}/{}@aggTrade/{}@forceOrder",
+      lower, timeframe, lower, lower
+    ),
+    MarketType::Spot => format!(
+      "{}@kline_{}/{}@aggTrade",
+      lower, timeframe, lower
+    ),
+  };
+  let base_ws = match market_type {
+    MarketType::Futures => "wss://fstream.binance.com/stream",
+    MarketType::Spot => "wss://stream.binance.com:9443/stream",
+  };
+  let url = format!("{}?streams={}", base_ws, streams);
   let memory = app.state::<MarketMemory>();
 
   let Ok((socket, _)) = tokio_tungstenite::connect_async(url).await else {
@@ -240,13 +265,18 @@ async fn subscribe_market_data(
   tasks: State<'_, MarketTasks>,
   symbol: String,
   timeframe: String,
+  market_type: Option<String>,
 ) -> Result<(), String> {
   let symbol = normalize_symbol(&symbol);
+  let market_type = MarketType::from_input(market_type.unwrap_or_else(|| "futures".to_string()).as_str());
   if symbol.is_empty() {
     return Err("Symbol is required".to_string());
   }
 
-  let key = symbol.clone();
+  let key = format!("{}:{}", symbol, match market_type {
+    MarketType::Futures => "futures",
+    MarketType::Spot => "spot",
+  });
   let mut map = tasks.tasks.lock().map_err(|_| "Market task lock failed".to_string())?;
   if let Some(handle) = map.remove(&key) {
     handle.abort();
@@ -255,14 +285,19 @@ async fn subscribe_market_data(
     return Err("Too many active market streams".to_string());
   }
 
-  let handle = async_runtime::spawn(listen_market_stream(app, symbol, timeframe));
+  let handle = async_runtime::spawn(listen_market_stream(app, symbol, timeframe, market_type));
   map.insert(key, handle);
   Ok(())
 }
 
 #[tauri::command]
-async fn unsubscribe_market_data(tasks: State<'_, MarketTasks>, symbol: String) -> Result<(), String> {
-  let key = normalize_symbol(&symbol);
+async fn unsubscribe_market_data(tasks: State<'_, MarketTasks>, symbol: String, market_type: Option<String>) -> Result<(), String> {
+  let symbol = normalize_symbol(&symbol);
+  let market_type = MarketType::from_input(market_type.unwrap_or_else(|| "futures".to_string()).as_str());
+  let key = format!("{}:{}", symbol, match market_type {
+    MarketType::Futures => "futures",
+    MarketType::Spot => "spot",
+  });
   let mut map = tasks.tasks.lock().map_err(|_| "Market task lock failed".to_string())?;
   if let Some(handle) = map.remove(&key) {
     handle.abort();
@@ -297,6 +332,9 @@ fn delete_secure_secret(key: String) -> Result<(), String> {
 }
 
 fn main() {
+  // Fix rustls provider selection when multiple providers are linked transitively.
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   let mut builder = tauri::Builder::default()
     .manage(MarketTasks::default())
     .manage(MarketMemory::default());

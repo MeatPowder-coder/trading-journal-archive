@@ -158,7 +158,7 @@ export function ChatDesk({
         accessToken: tokens.accessToken,
         sessionId,
         message: text,
-        model: 'claude-sonnet-4-20250514',
+        model: 'gemini-3.1-flash-lite-preview',
       });
 
       setMessages((current) => [

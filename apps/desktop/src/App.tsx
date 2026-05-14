@@ -40,6 +40,7 @@ import {
 import type {
   DesktopCockpitResponse,
   DesktopEvent,
+  MarketType,
   DesktopSessionResponse,
   DesktopTokens,
   PendingDesktopAuth,
@@ -131,6 +132,34 @@ function captureChartImageUrl() {
 }
 
 const timeframes: Timeframe[] = ['1m', '3m', '5m', '15m', '30m', '1h', '4h', '1d'];
+const marketSymbols: Record<MarketType, string[]> = {
+  futures: [
+    'BTCUSDT',
+    'ETHUSDT',
+    'SOLUSDT',
+    'XRPUSDT',
+    'BNBUSDT',
+    'DOGEUSDT',
+    'ADAUSDT',
+    'LINKUSDT',
+    'AVAXUSDT',
+    'SUIUSDT',
+    '1000PEPEUSDT',
+  ],
+  spot: [
+    'BTCUSDT',
+    'ETHUSDT',
+    'SOLUSDT',
+    'XRPUSDT',
+    'BNBUSDT',
+    'DOGEUSDT',
+    'ADAUSDT',
+    'LINKUSDT',
+    'AVAXUSDT',
+    'SUIUSDT',
+    'PEPEUSDT',
+  ],
+};
 const desktopTabs = [
   { id: 'trading-desk', label: 'Trading Desk' },
   { id: 'dashboard', label: 'Dashboard' },
@@ -154,13 +183,16 @@ export default function App() {
   const [cockpit, setCockpit] = useState<DesktopCockpitResponse | null>(null);
   const [backendEvents, setBackendEvents] = useState<DesktopEvent[]>([]);
   const [activeTab, setActiveTab] = useState<DesktopTabId>('trading-desk');
+  const [marketType, setMarketType] = useState<MarketType>('futures');
   const [symbol, setSymbol] = useState('BTCUSDT');
+  const [symbolFilter, setSymbolFilter] = useState('');
   const [timeframe, setTimeframe] = useState<Timeframe>('1m');
+  const [showMicroPanels, setShowMicroPanels] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>('Ready');
 
-  const market = useMarketData(symbol, timeframe, Boolean(tokens?.accessToken));
+  const market = useMarketData(symbol, timeframe, marketType, Boolean(tokens?.accessToken));
 
   const handleBackendEvent = useCallback((event: DesktopEvent) => {
     setBackendEvents((current) => [...current.slice(-80), event]);
@@ -179,6 +211,13 @@ export default function App() {
   const openTradesView = useMemo(() => cockpit?.openTrades || [], [cockpit?.openTrades]);
   const pendingOrdersView = useMemo(() => cockpit?.pendingOrders || [], [cockpit?.pendingOrders]);
   const activeTrade = openTradesView[0] || null;
+  const symbolOptions = useMemo(() => {
+    const list = marketSymbols[marketType];
+    const filter = symbolFilter.trim().toUpperCase();
+    if (!filter) return list;
+    const filtered = list.filter((candidate) => candidate.includes(filter));
+    return filtered.length ? filtered : list;
+  }, [marketType, symbolFilter]);
 
   const pairingBrowserUrl = useMemo(() => {
     const pairingId = pendingAuth?.pairingId || pairing?.pairingId || '';
@@ -243,6 +282,13 @@ export default function App() {
   useEffect(() => {
     saveClientName(clientName);
   }, [clientName]);
+
+  useEffect(() => {
+    const options = marketSymbols[marketType];
+    if (!options.includes(symbol)) {
+      setSymbol(options[0]);
+    }
+  }, [marketType, symbol]);
 
   useEffect(() => {
     if (!tokens?.accessToken) return;
@@ -450,6 +496,12 @@ export default function App() {
     };
   }, [completePendingPairing]);
 
+  useEffect(() => {
+    if (activeTab !== 'trading-desk' && activeTab !== 'live-market') return;
+    const id = setTimeout(() => window.dispatchEvent(new Event('resize')), 140);
+    return () => clearTimeout(id);
+  }, [activeTab, timeframe, symbol, marketType]);
+
   async function handleRefreshCockpit() {
     if (!tokens?.accessToken) return;
     setBusy(true);
@@ -522,7 +574,7 @@ export default function App() {
         tradeId,
         input: {
           prompt,
-          model: 'claude-server-side',
+          model: 'journal-ai-server',
           status: 'PENDING',
           context: {
             activeTrade,
@@ -555,7 +607,19 @@ export default function App() {
           <h1>Windows Trading Desk</h1>
         </div>
         <div className="symbol-controls">
-          <input value={symbol} onChange={(event) => setSymbol(event.target.value.toUpperCase())} />
+          <select value={marketType} onChange={(event) => setMarketType(event.target.value as MarketType)}>
+            <option value="futures">Futures</option>
+            <option value="spot">Spot</option>
+          </select>
+          <input
+            value={symbolFilter}
+            onChange={(event) => setSymbolFilter(event.target.value)}
+            placeholder="Search pair..."
+            className="symbol-filter"
+          />
+          <select value={symbol} onChange={(event) => setSymbol(event.target.value)} className="symbol-select">
+            {symbolOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
           <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as Timeframe)}>
             {timeframes.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
           </select>
@@ -602,6 +666,7 @@ export default function App() {
 
           <section className="session-strip">
             <span>{session?.user.name || session?.user.email || 'Desktop session'}</span>
+            <span>{marketType === 'futures' ? 'BINANCE FUTURES' : 'BINANCE SPOT'}</span>
             <b>{side}</b>
             <span>Entry {formatNumber(entry, 4)}</span>
             <span>Mark {formatNumber(latestPrice, 4)}</span>
@@ -625,12 +690,19 @@ export default function App() {
           {activeTab === 'trading-desk' ? (
             <div className="main-desk">
               <div className="chart-column">
-                <TradingViewChartWorkspace state={market.state} />
-                <div className="lower-panels">
-                  <CVDPanel points={market.state.cvd} />
-                  <FootprintPanel bins={market.state.footprint} />
-                  <LiquidationPanel events={market.state.liquidations} />
+                <TradingViewChartWorkspace state={market.state} active={activeTab === 'trading-desk'} />
+                <div className="desk-toolbar">
+                  <button className="btn" onClick={() => setShowMicroPanels((current) => !current)}>
+                    {showMicroPanels ? 'Hide CVD / Footprint / Liquidations' : 'Show CVD / Footprint / Liquidations'}
+                  </button>
                 </div>
+                {showMicroPanels ? (
+                  <div className="lower-panels">
+                    <CVDPanel points={market.state.cvd} />
+                    <FootprintPanel bins={market.state.footprint} />
+                    <LiquidationPanel events={market.state.liquidations} />
+                  </div>
+                ) : null}
               </div>
               <aside className="right-rail">
                 <OrderPanel activeTrade={activeTrade} tokens={tokens} onMoveProtection={handleMoveProtection} />
@@ -698,12 +770,14 @@ export default function App() {
           {activeTab === 'live-market' ? (
             <section className="live-market-layout">
               <div className="chart-column">
-                <TradingViewChartWorkspace state={market.state} />
-                <div className="lower-panels">
-                  <CVDPanel points={market.state.cvd} />
-                  <FootprintPanel bins={market.state.footprint} />
-                  <LiquidationPanel events={market.state.liquidations} />
-                </div>
+                <TradingViewChartWorkspace state={market.state} active={activeTab === 'live-market'} />
+                {showMicroPanels ? (
+                  <div className="lower-panels">
+                    <CVDPanel points={market.state.cvd} />
+                    <FootprintPanel bins={market.state.footprint} />
+                    <LiquidationPanel events={market.state.liquidations} />
+                  </div>
+                ) : null}
               </div>
               <article className="side-card">
                 <div className="card-title-row">
