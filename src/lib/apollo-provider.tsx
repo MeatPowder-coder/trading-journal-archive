@@ -12,8 +12,13 @@ export function ApolloProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const initClient = async () => {
-      const session = await getSession();
-      const token = (session as any)?.accessToken;
+      let token: string | undefined;
+      try {
+        const session = await getSession();
+        token = (session as any)?.accessToken;
+      } catch {
+        token = undefined;
+      }
 
       // Definir headers basados en la sesión
       const headers: Record<string, string> = {};
