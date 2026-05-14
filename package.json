@@ -2,13 +2,23 @@
   "name": "trading-journal",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "next dev",
+    "dev:api": "pnpm --filter @trading-journal/api dev",
+    "dev:journal": "next dev",
+    "dev:trading": "pnpm --filter trading-journal-desktop tauri:dev",
+    "dev:finanzas": "pnpm --filter @trading-journal/finanzas-web dev",
     "build": "next build",
+    "build:all": "turbo run build",
+    "typecheck": "turbo run typecheck",
     "start": "next start",
     "lint": "next lint",
     "alerts:monitor": "node scripts/alerts-monitor.js",
     "alerts:sql": "node scripts/apply-alerts-sql.js",
+    "db:pull": "pnpm --filter @trading-journal/db db:pull",
+    "db:generate": "pnpm --filter @trading-journal/db db:generate",
+    "db:migrate": "pnpm --filter @trading-journal/db db:migrate",
     "desktop:install": "npm --prefix apps/desktop install",
     "desktop:web": "npm --prefix apps/desktop run dev",
     "desktop:dev": "npm --prefix apps/desktop run tauri:dev",
@@ -60,6 +70,7 @@
     "postcss": "^8.4.38",
     "prisma": "^6.19.0",
     "tailwindcss": "^3.4.3",
+    "turbo": "^2.6.3",
     "typescript": "^5.4.5"
   }
 }

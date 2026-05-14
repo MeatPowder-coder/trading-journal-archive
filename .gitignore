@@ -49,3 +49,5 @@ next-env.d.ts
 # desktop build outputs
 apps/desktop/dist/
 apps/desktop/src-tauri/target/
+apps/trading-app/dist/
+apps/trading-app/src-tauri/target/

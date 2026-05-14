@@ -63,6 +63,9 @@ model trades_activos {
   notas_cierre          String?
   pnl_realizado         Decimal?                    @default(dbgenerated("\nCASE\n    WHEN ((precio_salida IS NOT NULL) AND (precio_entrada > (0)::numeric) AND ((estado)::text = 'CLOSED'::text)) THEN\n    CASE\n        WHEN ((direccion)::text = 'LONG'::text) THEN (((precio_salida - precio_entrada) / precio_entrada) * (monto_margin * apalancamiento))\n        WHEN ((direccion)::text = 'SHORT'::text) THEN (((precio_entrada - precio_salida) / precio_entrada) * (monto_margin * apalancamiento))\n        ELSE (0)::numeric\n    END\n    ELSE NULL::numeric\nEND")) @db.Decimal(15, 2)
   cuentas               cuentas?                    @relation(fields: [cuenta_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_trades_cuenta")
+  sltp_moves            SLTPMove[]
+  chart_snapshots       ChartSnapshot[]
+  ai_analyses           AIAnalysis[]
 }
 
 model transacciones {
@@ -129,6 +132,61 @@ model bot_sessions {
   chat_id             BigInt    @id
   last_screenshot_url String?
   last_updated        DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model SLTPMove {
+  id                Int             @id @default(autoincrement())
+  tradeId           Int             @map("trade_id")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  moveType          String          @map("move_type") @db.VarChar(8)
+  fromPrice         Decimal?        @map("from_price") @db.Decimal(20, 8)
+  toPrice           Decimal         @map("to_price") @db.Decimal(20, 8)
+  reason            String?
+  priceAtMove       Decimal?        @map("price_at_move") @db.Decimal(20, 8)
+  movedTowardEntry  Boolean?        @map("moved_toward_entry")
+  rRatioAtMove      Decimal?        @map("r_ratio_at_move") @db.Decimal(12, 4)
+  trade             trades_activos  @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  chartSnapshots    ChartSnapshot[]
+
+  @@index([tradeId, createdAt], map: "idx_sltp_moves_trade_created_at")
+  @@map("sltp_moves")
+}
+
+model ChartSnapshot {
+  id           Int                  @id @default(autoincrement())
+  tradeId      Int                  @map("trade_id")
+  sltpMoveId   Int?                 @map("sltp_move_id")
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  trigger      String               @db.VarChar(20)
+  imageUrl     String               @map("image_url")
+  timeframe    String?              @db.VarChar(20)
+  indicators   Json                 @default("{}")
+  trade        trades_activos       @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  sltpMove     SLTPMove?            @relation(fields: [sltpMoveId], references: [id], onDelete: SetNull)
+  aiAnalyses   AIAnalysis[]
+
+  @@index([tradeId, createdAt], map: "idx_chart_snapshots_trade_created_at")
+  @@index([sltpMoveId], map: "idx_chart_snapshots_sltp_move_id")
+  @@map("chart_snapshots")
+}
+
+model AIAnalysis {
+  id         Int              @id @default(autoincrement())
+  tradeId    Int              @map("trade_id")
+  snapshotId Int?             @map("snapshot_id")
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  prompt     String
+  response   String?
+  model      String           @db.VarChar(120)
+  context    Json             @default("{}")
+  status     String           @default("PENDING") @db.VarChar(20)
+  error      String?
+  trade      trades_activos   @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  snapshot   ChartSnapshot?   @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+
+  @@index([tradeId, createdAt], map: "idx_ai_analyses_trade_created_at")
+  @@index([snapshotId], map: "idx_ai_analyses_snapshot_id")
+  @@map("ai_analyses")
 }
 
 enum calificacion_personal_type {

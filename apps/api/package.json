@@ -1,0 +1,30 @@
+{
+  "name": "@trading-journal/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.1.0",
+    "@fastify/websocket": "^11.2.0",
+    "@trading-journal/shared": "workspace:*",
+    "fastify": "^5.6.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.18.0",
+    "ws": "^8.19.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20.12.12",
+    "@types/pg": "^8.16.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.4.5"
+  }
+}

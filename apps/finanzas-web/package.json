@@ -1,0 +1,11 @@
+{
+  "name": "@trading-journal/finanzas-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/not-yet-implemented.mjs",
+    "build": "node scripts/not-yet-implemented.mjs",
+    "typecheck": "node scripts/not-yet-implemented.mjs"
+  }
+}
