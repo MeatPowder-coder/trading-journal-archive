@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     }
 
     const now = new Date();
-    const [balanceUsdt, blockInfo, session, openTrades, pendingOrders] = await Promise.all([
+    const [balanceUsdt, blockInfo, session, openTrades, pendingOrders, recentTrades] = await Promise.all([
       getLatestAccountBalanceUsdt(),
       isTradingBlockedNow(now),
       getTodayTradingSession(now),
@@ -42,6 +42,12 @@ export async function GET(req: NextRequest) {
          ORDER BY created_at DESC, id DESC
          LIMIT 40`
       ).catch(() => ({ rows: [] as any[] })),
+      query(
+        `SELECT to_jsonb(t) AS trade
+         FROM trades_activos t
+         ORDER BY t.id DESC
+         LIMIT 600`
+      ).catch(() => ({ rows: [] as any[] })),
     ]);
 
     return withDesktopCors(req, {
@@ -64,6 +70,7 @@ export async function GET(req: NextRequest) {
       },
       openTrades: openTrades.rows,
       pendingOrders: pendingOrders.rows,
+      recentTrades: recentTrades.rows.map((row: any) => row.trade || {}),
     });
   } catch (error: any) {
     return withDesktopCors(

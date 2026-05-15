@@ -75,6 +75,7 @@ export interface DesktopCockpitResponse {
   };
   openTrades: Array<Record<string, unknown>>;
   pendingOrders: Array<Record<string, unknown>>;
+  recentTrades?: Array<Record<string, unknown>>;
 }
 
 export interface DesktopBootstrapResponse {

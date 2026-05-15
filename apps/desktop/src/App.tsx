@@ -253,7 +253,11 @@ export default function App() {
         ]);
         setSession(bootstrap.session);
         setCockpit(bootstrap.cockpit);
-        setDesktopTrades(tradesPayload?.trades || []);
+        setDesktopTrades(
+          tradesPayload?.trades?.length
+            ? tradesPayload.trades
+            : bootstrap.cockpit?.recentTrades || []
+        );
         if (bootstrap.uiConfig?.defaultSymbol) {
           setSymbol((current) => current || bootstrap.uiConfig.defaultSymbol.toUpperCase());
         }
@@ -270,7 +274,11 @@ export default function App() {
         ]);
         setSession(sessionPayload);
         setCockpit(cockpitPayload);
-        setDesktopTrades(tradesPayload?.trades || []);
+        setDesktopTrades(
+          tradesPayload?.trades?.length
+            ? tradesPayload.trades
+            : cockpitPayload?.recentTrades || []
+        );
         setLastSyncAt(new Date().toISOString());
       }
     },

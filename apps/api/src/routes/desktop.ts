@@ -134,7 +134,7 @@ export async function registerDesktopRoutes(instance: FastifyInstance) {
     if (!auth) return reply.code(401).send({ error: 'Desktop access token required' });
 
     const now = new Date();
-    const [balanceUsdt, blockInfo, openTrades, pendingOrders] = await Promise.all([
+    const [balanceUsdt, blockInfo, openTrades, pendingOrders, recentTrades] = await Promise.all([
       getLatestBalanceUsdt(),
       getTradingBlockInfo(now),
       query(
@@ -158,6 +158,12 @@ export async function registerDesktopRoutes(instance: FastifyInstance) {
          ORDER BY created_at DESC, id DESC
          LIMIT 80`
       ).catch(() => ({ rows: [] })),
+      query(
+        `SELECT to_jsonb(t) AS trade
+         FROM trades_activos t
+         ORDER BY t.id DESC
+         LIMIT 600`
+      ).catch(() => ({ rows: [] })),
     ]);
 
     return {
@@ -180,6 +186,7 @@ export async function registerDesktopRoutes(instance: FastifyInstance) {
       },
       openTrades: openTrades.rows,
       pendingOrders: pendingOrders.rows,
+      recentTrades: recentTrades.rows.map((row: any) => row.trade || {}),
     };
   });
 
@@ -223,7 +230,7 @@ export async function registerDesktopRoutes(instance: FastifyInstance) {
         [auth.deviceSessionId]
       ),
       (async () => {
-        const [balanceUsdt, blockInfo, openTrades, pendingOrders] = await Promise.all([
+        const [balanceUsdt, blockInfo, openTrades, pendingOrders, recentTrades] = await Promise.all([
           getLatestBalanceUsdt(),
           getTradingBlockInfo(now),
           query(
@@ -247,6 +254,12 @@ export async function registerDesktopRoutes(instance: FastifyInstance) {
              ORDER BY created_at DESC, id DESC
              LIMIT 80`
           ).catch(() => ({ rows: [] })),
+          query(
+            `SELECT to_jsonb(t) AS trade
+             FROM trades_activos t
+             ORDER BY t.id DESC
+             LIMIT 600`
+          ).catch(() => ({ rows: [] })),
         ]);
 
         return {
@@ -269,6 +282,7 @@ export async function registerDesktopRoutes(instance: FastifyInstance) {
           },
           openTrades: openTrades.rows,
           pendingOrders: pendingOrders.rows,
+          recentTrades: recentTrades.rows.map((row: any) => row.trade || {}),
         };
       })(),
     ]);
