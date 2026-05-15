@@ -18,19 +18,9 @@ export async function GET(req: NextRequest) {
 
     const limit = toLimit(req.nextUrl.searchParams.get('limit'));
     const result = await query(
-      `SELECT id, simbolo, precio_entrada, precio_salida, pnl_realizado, pnl_bruto, comision,
-              estado, direccion, apalancamiento, ticker_api, broker, fecha_apertura, fecha_cierre,
-              monto_margin, cuenta_id, tipo_estrategia, screenshot_url, nombre_jugada, setup_tag,
-              timeframe, emocion_entrada, zona_entrada, tendencia_macro, contexto_mercado,
-              volatilidad, tipo_liquidez, estado_delta, volumen_estado, absorcion_detectada,
-              calificacion_personal, notas_aprendizaje, notas_cierre, stop_loss, take_profit,
-              sl_original, sl_was_moved, sl_move_direction, sl_move_count, max_adverse_excursion,
-              max_favorable_excursion, rr_estimated, rr_actual, rr_max_possible,
-              checklist_confirmed, checklist_timestamp, entry_tesis, session_mental_state,
-              close_rating, sl_move_reflection, risk_amount_usdt, risk_percent,
-              consecutive_losses_snapshot, order_type, entry_order_status
-       FROM trades_activos
-       ORDER BY id DESC
+      `SELECT to_jsonb(t) AS trade
+       FROM trades_activos t
+       ORDER BY t.id DESC
        LIMIT $1`,
       [limit]
     );
@@ -39,7 +29,7 @@ export async function GET(req: NextRequest) {
       success: true,
       asOf: new Date().toISOString(),
       total: result.rows.length,
-      trades: result.rows,
+      trades: result.rows.map((row: any) => row.trade || {}),
     });
   } catch (error: any) {
     return withDesktopCors(
