@@ -196,7 +196,7 @@ export default function App() {
   const [showMicroPanels, setShowMicroPanels] = useState(true);
   const [showRightRail, setShowRightRail] = useState(true);
   const [focusChartMode, setFocusChartMode] = useState(false);
-  const [useWebMirrorTabs, setUseWebMirrorTabs] = useState(true);
+  const [useWebMirrorTabs, setUseWebMirrorTabs] = useState(false);
   const [rightRailWidth, setRightRailWidth] = useState(360);
   const [lowerPanelsHeight, setLowerPanelsHeight] = useState(250);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
@@ -760,7 +760,7 @@ export default function App() {
           </select>
           <button className="btn" onClick={handleRefreshCockpit} disabled={busy || !tokens}>Sync</button>
           <button className={useWebMirrorTabs ? 'btn btn-primary' : 'btn'} onClick={() => setUseWebMirrorTabs((value) => !value)}>
-            {useWebMirrorTabs ? 'Web Parity ON' : 'Web Parity OFF'}
+            {useWebMirrorTabs ? 'Mirror Web (TEMP)' : 'Native Mode'}
           </button>
           <button className="btn btn-danger" onClick={handleSignOutDevice} disabled={busy || !tokens}>Sign out</button>
         </div>
