@@ -481,6 +481,55 @@ label {
   gap: 12px;
 }
 
+.web-mirror-shell {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: calc(100vh - 320px);
+}
+
+.web-mirror-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.web-mirror-topbar h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.web-mirror-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.web-mirror-url {
+  border: 1px solid rgba(46, 74, 104, 0.6);
+  background: rgba(7, 19, 33, 0.92);
+  color: var(--text-soft);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.web-mirror-frame {
+  flex: 1;
+  border: 1px solid rgba(46, 74, 104, 0.6);
+  border-radius: 12px;
+  width: 100%;
+  min-height: 620px;
+  background: #05090f;
+}
+
 .placeholder-workspace {
   border: 1px solid var(--line);
   border-radius: 16px;
