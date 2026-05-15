@@ -39,7 +39,107 @@ textarea { font: inherit; }
 
 .terminal-shell {
   min-height: 100%;
-  padding: 18px;
+  padding: 10px;
+}
+
+.desktop-parity-shell {
+  min-height: calc(100vh - 20px);
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.desktop-parity-sidebar {
+  border: 1px solid var(--line);
+  background: rgba(7, 13, 22, 0.92);
+  border-radius: 18px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.desktop-parity-brand h2 {
+  margin: 4px 0 0;
+  font-size: 1.02rem;
+}
+
+.desktop-parity-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+}
+
+.desktop-parity-link {
+  border: 1px solid rgba(46, 74, 104, 0.52);
+  background: rgba(8, 21, 36, 0.85);
+  color: #dbeeff;
+  border-radius: 10px;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.desktop-parity-link.active {
+  border-color: #35b7ff;
+  background: linear-gradient(180deg, rgba(16, 50, 81, 0.95), rgba(11, 30, 50, 0.95));
+  color: #fff;
+}
+
+.desktop-parity-sidebar-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.desktop-parity-main {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: rgba(5, 9, 15, 0.84);
+  border-radius: 18px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.desktop-parity-header {
+  border: 1px solid rgba(46, 74, 104, 0.62);
+  background: rgba(7, 19, 33, 0.9);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(360px, auto);
+  gap: 12px;
+  align-items: center;
+}
+
+.desktop-parity-header-main h1 {
+  margin: 4px 0;
+  font-size: 1.45rem;
+  letter-spacing: -0.03em;
+}
+
+.desktop-parity-header-main small {
+  color: var(--text-soft);
+}
+
+.desktop-parity-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.desktop-parity-header-actions select {
+  border: 1px solid var(--line-strong);
+  background: #071321;
+  color: #eef6ff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  outline: none;
 }
 
 .terminal-topbar {
@@ -190,7 +290,6 @@ label {
 .actions { display: flex; gap: 10px; margin-top: 16px; }
 
 .trading-grid {
-  margin-top: 14px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -976,6 +1075,21 @@ label {
 }
 
 @media (max-width: 1180px) {
+  .desktop-parity-shell {
+    grid-template-columns: 1fr;
+  }
+  .desktop-parity-sidebar {
+    order: 2;
+  }
+  .desktop-parity-main {
+    order: 1;
+  }
+  .desktop-parity-header {
+    grid-template-columns: 1fr;
+  }
+  .desktop-parity-header-actions {
+    justify-content: flex-start;
+  }
   .terminal-topbar { grid-template-columns: 1fr; }
   .status-stack { align-items: flex-start; }
   .risk-header { grid-template-columns: repeat(2, minmax(0, 1fr)); }

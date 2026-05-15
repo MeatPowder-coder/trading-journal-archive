@@ -780,94 +780,125 @@ export default function App() {
     document.addEventListener('mouseup', onUp);
   }, [watchlistWidth]);
 
+  const activeTabMeta = useMemo(
+    () => desktopTabs.find((tab) => tab.id === activeTab) || desktopTabs[0],
+    [activeTab]
+  );
+  const showTradingControls = activeTab === 'trading-desk' || activeTab === 'live-market';
+
   return (
     <div className="terminal-shell">
-      <header className="terminal-topbar">
-        <div className="brand-block">
-          <p className="eyebrow">Trading Journal</p>
-          <h1>Windows Trading Desk</h1>
-        </div>
-        <div className="symbol-controls">
-          <select value={marketType} onChange={(event) => setMarketType(event.target.value as MarketType)}>
-            <option value="futures">Futures</option>
-            <option value="spot">Spot</option>
-          </select>
-          <select value={symbol} onChange={(event) => setSymbol(event.target.value)} className="symbol-select">
-            {symbolOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-          </select>
-          <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as Timeframe)}>
-            {timeframes.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
-          </select>
-          <button className="btn" onClick={handleRefreshCockpit} disabled={busy || !tokens}>Sync</button>
-          <button className={useWebMirrorTabs ? 'btn btn-primary' : 'btn'} onClick={() => setUseWebMirrorTabs((value) => !value)}>
-            {useWebMirrorTabs ? 'Mirror Web (TEMP)' : 'Native Mode'}
-          </button>
-          <button className="btn btn-danger" onClick={handleSignOutDevice} disabled={busy || !tokens}>Sign out</button>
-        </div>
-        <div className="status-stack">
-          <span className="status-chip">{message}</span>
-          <small>Last sync: <b>{formatDateIso(lastSyncAt)}</b></small>
-        </div>
-      </header>
-
       {!tokens ? (
-        <main className="login-stage">
-          <section className="login-card">
-            <p className="eyebrow">Secure Desktop Login</p>
-            <h2>Connect the Windows app to your journal</h2>
-            <p>
-              Google login opens in your browser and returns here through the Trading Journal deep link.
-              No manual codes are required.
-            </p>
-            <div className="settings-grid">
-              <div>
-                <label>Backend URL</label>
-                <input value={backendUrl} onChange={(event) => setBackendUrl(event.target.value)} className="text-input" />
-              </div>
-              <div>
-                <label>Client Name</label>
-                <input value={clientName} onChange={(event) => setClientName(event.target.value)} className="text-input" />
-              </div>
+        <>
+          <header className="terminal-topbar">
+            <div className="brand-block">
+              <p className="eyebrow">Trading Journal</p>
+              <h1>Windows Trading Desk</h1>
             </div>
-            <div className="actions">
-              <button onClick={handleStartPairing} disabled={busy} className="btn btn-primary">Sign In With Google</button>
-              {pendingAuth ? <button onClick={handleRetryBrowserLogin} disabled={busy} className="btn">Reopen Browser</button> : null}
+            <div className="status-stack">
+              <span className="status-chip">{message}</span>
             </div>
-            {pendingAuth || pairing ? (
-              <p className="muted">Login expires at {formatDateIso((pendingAuth || pairing)?.expiresAt)}</p>
-            ) : null}
-          </section>
-        </main>
+          </header>
+          <main className="login-stage">
+            <section className="login-card">
+              <p className="eyebrow">Secure Desktop Login</p>
+              <h2>Connect the Windows app to your journal</h2>
+              <p>
+                Google login opens in your browser and returns here through the Trading Journal deep link.
+                No manual codes are required.
+              </p>
+              <div className="settings-grid">
+                <div>
+                  <label>Backend URL</label>
+                  <input value={backendUrl} onChange={(event) => setBackendUrl(event.target.value)} className="text-input" />
+                </div>
+                <div>
+                  <label>Client Name</label>
+                  <input value={clientName} onChange={(event) => setClientName(event.target.value)} className="text-input" />
+                </div>
+              </div>
+              <div className="actions">
+                <button onClick={handleStartPairing} disabled={busy} className="btn btn-primary">Sign In With Google</button>
+                {pendingAuth ? <button onClick={handleRetryBrowserLogin} disabled={busy} className="btn">Reopen Browser</button> : null}
+              </div>
+              {pendingAuth || pairing ? (
+                <p className="muted">Login expires at {formatDateIso((pendingAuth || pairing)?.expiresAt)}</p>
+              ) : null}
+            </section>
+          </main>
+        </>
       ) : (
-        <main className="trading-grid">
-          {!(activeTab === 'trading-desk' && focusChartMode) ? (
-            <>
-              <RiskHeader cockpit={cockpit} marketStatus={market.status} backendStatus={backendWsStatus} />
-
-              <section className="session-strip">
-                <span>{session?.user.name || session?.user.email || 'Desktop session'}</span>
-                <span>{marketType === 'futures' ? 'BINANCE FUTURES' : 'BINANCE SPOT'}</span>
-                <b>{side}</b>
-                <span>Entry {formatNumber(entry, 4)}</span>
-                <span>Mark {formatNumber(latestPrice, 4)}</span>
-                <span className={Number(unrealizedHint) >= 0 ? 'positive' : 'negative'}>
-                  PnL hint {formatNumber(unrealizedHint, 2)}%
-                </span>
-              </section>
-            </>
-          ) : null}
-
-          <nav className="workspace-tabs">
-            {desktopTabs.map((tab) => (
-              <button
-                key={tab.id}
-                className={activeTab === tab.id ? 'workspace-tab active' : 'workspace-tab'}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
+        <main className="desktop-parity-shell">
+          <aside className="desktop-parity-sidebar">
+            <div className="desktop-parity-brand">
+              <p className="eyebrow">Desktop</p>
+              <h2>Trading Journal</h2>
+            </div>
+            <nav className="desktop-parity-nav">
+              {desktopTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  className={activeTab === tab.id ? 'desktop-parity-link active' : 'desktop-parity-link'}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+            <div className="desktop-parity-sidebar-foot">
+              <button className={useWebMirrorTabs ? 'btn btn-primary' : 'btn'} onClick={() => setUseWebMirrorTabs((value) => !value)}>
+                {useWebMirrorTabs ? 'Mirror Web (TEMP)' : 'Native Mode'}
               </button>
-            ))}
-          </nav>
+              <button className="btn btn-danger" onClick={handleSignOutDevice} disabled={busy || !tokens}>
+                Sign out
+              </button>
+            </div>
+          </aside>
+
+          <section className="desktop-parity-main">
+            <header className="desktop-parity-header">
+              <div className="desktop-parity-header-main">
+                <p className="eyebrow">Journal Workspace</p>
+                <h1>{activeTabMeta.label}</h1>
+                <small>{message}</small>
+              </div>
+              <div className="desktop-parity-header-actions">
+                {showTradingControls ? (
+                  <>
+                    <select value={marketType} onChange={(event) => setMarketType(event.target.value as MarketType)}>
+                      <option value="futures">Futures</option>
+                      <option value="spot">Spot</option>
+                    </select>
+                    <select value={symbol} onChange={(event) => setSymbol(event.target.value)} className="symbol-select">
+                      {symbolOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                    <select value={timeframe} onChange={(event) => setTimeframe(event.target.value as Timeframe)}>
+                      {timeframes.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
+                    </select>
+                  </>
+                ) : null}
+                <button className="btn" onClick={handleRefreshCockpit} disabled={busy || !tokens}>Sync</button>
+                <span className="status-chip">Last sync: {formatDateIso(lastSyncAt)}</span>
+              </div>
+            </header>
+
+            <div className="trading-grid">
+              {!(activeTab === 'trading-desk' && focusChartMode) ? (
+                <>
+                  <RiskHeader cockpit={cockpit} marketStatus={market.status} backendStatus={backendWsStatus} />
+
+                  <section className="session-strip">
+                    <span>{session?.user.name || session?.user.email || 'Desktop session'}</span>
+                    <span>{marketType === 'futures' ? 'BINANCE FUTURES' : 'BINANCE SPOT'}</span>
+                    <b>{side}</b>
+                    <span>Entry {formatNumber(entry, 4)}</span>
+                    <span>Mark {formatNumber(latestPrice, 4)}</span>
+                    <span className={Number(unrealizedHint) >= 0 ? 'positive' : 'negative'}>
+                      PnL hint {formatNumber(unrealizedHint, 2)}%
+                    </span>
+                  </section>
+                </>
+              ) : null}
 
           {activeTab === 'trading-desk' ? (
             <div className="main-desk">
@@ -1186,6 +1217,8 @@ export default function App() {
               </article>
             </section>
           ) : null}
+            </div>
+          </section>
         </main>
       )}
     </div>
