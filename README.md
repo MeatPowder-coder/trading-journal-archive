@@ -72,9 +72,12 @@ La app desktop vive en `apps/desktop` y usa:
 Para que la app desktop tenga chat, órdenes, eventos WSS y demás rutas `/v1/*`, corre también `apps/api` en tu máquina:
 
 ```bash
-pnpm dev:api
+pnpm dev:desktop:backend
 pnpm dev:trading
 ```
+
+- `dev:desktop:backend` levanta `journal-web` (`localhost:3000`) y `apps/api` (`localhost:4000`) en paralelo.
+- `dev:trading` levanta Tauri + Vite (desktop app).
 
 Opcionalmente puedes forzar endpoints de API/WSS en `apps/desktop/.env`:
 
@@ -84,6 +87,8 @@ VITE_WS_URL=ws://127.0.0.1:4000
 ```
 
 Si no defines esas variables, el cliente desktop ahora intenta fallback automático a `http://127.0.0.1:4000` / `ws://127.0.0.1:4000` en modo desarrollo.
+
+`apps/api` carga automáticamente variables desde `.env` / `.env.local` de la raíz del repo (además de variables ya presentes en el shell).
 
 ### Comandos rápidos
 

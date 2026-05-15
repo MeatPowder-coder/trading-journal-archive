@@ -7,6 +7,7 @@
     "dev": "next dev",
     "dev:api": "pnpm --filter @trading-journal/api dev",
     "dev:journal": "next dev",
+    "dev:desktop:backend": "node scripts/dev-desktop-backend.mjs",
     "dev:trading": "pnpm --filter trading-journal-desktop tauri:dev",
     "dev:finanzas": "pnpm --filter @trading-journal/finanzas-web dev",
     "build": "next build",
