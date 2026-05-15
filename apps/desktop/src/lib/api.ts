@@ -7,6 +7,7 @@ import type {
   DesktopCockpitResponse,
   DesktopEvent,
   DesktopSessionResponse,
+  DesktopTradesResponse,
   PairingPollResponse,
   PairingStartResponse,
   SLTPMoveInput,
@@ -224,6 +225,26 @@ export async function fetchDesktopBootstrap(params: {
   return fetchApiJsonWithFallback<DesktopBootstrapResponse>({
     baseUrl: params.baseUrl,
     path: '/v1/desktop/bootstrap',
+    init: {
+      headers: authHeaders(params.accessToken),
+    },
+  });
+}
+
+export async function fetchDesktopTrades(params: {
+  baseUrl: string;
+  accessToken: string;
+  limit?: number;
+}) {
+  const qs = new URLSearchParams();
+  if (params.limit && Number.isFinite(params.limit)) {
+    qs.set('limit', String(Math.max(30, Math.min(1000, Math.floor(params.limit)))));
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+
+  return fetchApiJsonWithFallback<DesktopTradesResponse>({
+    baseUrl: params.baseUrl,
+    path: `/v1/desktop/trades${suffix}`,
     init: {
       headers: authHeaders(params.accessToken),
     },

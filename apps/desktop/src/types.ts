@@ -97,6 +97,15 @@ export interface DesktopBootstrapResponse {
   };
 }
 
+export type DesktopTradeRow = Record<string, unknown>;
+
+export interface DesktopTradesResponse {
+  success: boolean;
+  asOf: string;
+  total: number;
+  trades: DesktopTradeRow[];
+}
+
 export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d';
 export type MarketType = 'futures' | 'spot';
 

@@ -6,6 +6,7 @@ import { JournalDashboardParity } from '@trading-journal/journal-ui';
 import { AIAnalysisPanel } from './components/AIAnalysisPanel';
 import { ChatDesk } from './components/ChatDesk';
 import { CVDPanel } from './components/CVDPanel';
+import { DesktopDashboardNative } from './components/DesktopDashboardNative';
 import { FootprintPanel } from './components/FootprintPanel';
 import { JournalSidebar } from './components/JournalSidebar';
 import { LiquidationPanel } from './components/LiquidationPanel';
@@ -20,6 +21,7 @@ import {
   createChartSnapshot,
   createSLTPMove,
   defaultBackendUrl,
+  fetchDesktopTrades,
   fetchDesktopBootstrap,
   fetchDesktopCockpit,
   fetchDesktopSession,
@@ -187,6 +189,7 @@ export default function App() {
   const [tokens, setTokens] = useState<DesktopTokens | null>(null);
   const [session, setSession] = useState<DesktopSessionResponse | null>(null);
   const [cockpit, setCockpit] = useState<DesktopCockpitResponse | null>(null);
+  const [desktopTrades, setDesktopTrades] = useState<Record<string, unknown>[]>([]);
   const [backendEvents, setBackendEvents] = useState<DesktopEvent[]>([]);
   const [activeTab, setActiveTab] = useState<DesktopTabId>('trading-desk');
   const [marketType, setMarketType] = useState<MarketType>('futures');
@@ -244,9 +247,13 @@ export default function App() {
   const loadDesktopState = useCallback(
     async (accessToken: string) => {
       try {
-        const bootstrap = await fetchDesktopBootstrap({ baseUrl: backendUrl, accessToken });
+        const [bootstrap, tradesPayload] = await Promise.all([
+          fetchDesktopBootstrap({ baseUrl: backendUrl, accessToken }),
+          fetchDesktopTrades({ baseUrl: backendUrl, accessToken, limit: 600 }).catch(() => null),
+        ]);
         setSession(bootstrap.session);
         setCockpit(bootstrap.cockpit);
+        setDesktopTrades(tradesPayload?.trades || []);
         if (bootstrap.uiConfig?.defaultSymbol) {
           setSymbol((current) => current || bootstrap.uiConfig.defaultSymbol.toUpperCase());
         }
@@ -256,12 +263,14 @@ export default function App() {
         setLastSyncAt(bootstrap.asOf || new Date().toISOString());
       } catch {
         // Fallback path while backend bootstrap endpoint is rolling out.
-        const [sessionPayload, cockpitPayload] = await Promise.all([
+        const [sessionPayload, cockpitPayload, tradesPayload] = await Promise.all([
           fetchDesktopSession({ baseUrl: backendUrl, accessToken }),
           fetchDesktopCockpit({ baseUrl: backendUrl, accessToken }),
+          fetchDesktopTrades({ baseUrl: backendUrl, accessToken, limit: 600 }).catch(() => null),
         ]);
         setSession(sessionPayload);
         setCockpit(cockpitPayload);
+        setDesktopTrades(tradesPayload?.trades || []);
         setLastSyncAt(new Date().toISOString());
       }
     },
@@ -340,6 +349,7 @@ export default function App() {
           setTokens(null);
           setSession(null);
           setCockpit(null);
+          setDesktopTrades([]);
           setLastSyncAt(null);
           setMessage(refreshError instanceof Error ? refreshError.message : reason);
         }
@@ -541,6 +551,7 @@ export default function App() {
       setTokens(null);
       setSession(null);
       setCockpit(null);
+      setDesktopTrades([]);
       setPairing(null);
       setPendingAuth(null);
       setLastSyncAt(null);
@@ -897,6 +908,7 @@ export default function App() {
 
           {activeTab === 'dashboard' && !useWebMirrorTabs ? (
             <section className="parity-panel">
+              <DesktopDashboardNative trades={desktopTrades} />
               <JournalDashboardParity snapshot={dashboardSnapshot} title="Desktop Journal Snapshot" />
             </section>
           ) : null}
