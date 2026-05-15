@@ -242,13 +242,20 @@ export async function fetchDesktopTrades(params: {
   }
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
 
-  return fetchApiJsonWithFallback<DesktopTradesResponse>({
-    baseUrl: params.baseUrl,
-    path: `/v1/desktop/trades${suffix}`,
-    init: {
+  try {
+    return await fetchApiJsonWithFallback<DesktopTradesResponse>({
+      baseUrl: params.baseUrl,
+      path: `/v1/desktop/trades${suffix}`,
+      init: {
+        headers: authHeaders(params.accessToken),
+      },
+    });
+  } catch {
+    const legacy = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/trades${suffix}`, {
       headers: authHeaders(params.accessToken),
-    },
-  });
+    });
+    return parseJsonOrThrow<DesktopTradesResponse>(legacy);
+  }
 }
 
 export async function createSLTPMove(params: {
