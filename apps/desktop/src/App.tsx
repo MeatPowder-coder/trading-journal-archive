@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { openUrl as openExternalUrl } from '@tauri-apps/plugin-opener';
 import { buildDashboardSnapshotFromDesktop } from '@trading-journal/journal-data';
@@ -193,6 +193,10 @@ export default function App() {
   const [symbolFilter, setSymbolFilter] = useState('');
   const [timeframe, setTimeframe] = useState<Timeframe>('1m');
   const [showMicroPanels, setShowMicroPanels] = useState(true);
+  const [showRightRail, setShowRightRail] = useState(true);
+  const [focusChartMode, setFocusChartMode] = useState(false);
+  const [rightRailWidth, setRightRailWidth] = useState(360);
+  const [lowerPanelsHeight, setLowerPanelsHeight] = useState(250);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>('Ready');
@@ -676,6 +680,54 @@ export default function App() {
       : ((latestPrice - entry) / entry) * 100
     : null;
 
+  const startRightRailResize = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = rightRailWidth;
+
+    const onMove = (moveEvent: MouseEvent) => {
+      const delta = startX - moveEvent.clientX;
+      const next = Math.max(300, Math.min(560, startWidth + delta));
+      setRightRailWidth(next);
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [rightRailWidth]);
+
+  const startLowerPanelsResize = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = lowerPanelsHeight;
+
+    const onMove = (moveEvent: MouseEvent) => {
+      const delta = startY - moveEvent.clientY;
+      const next = Math.max(160, Math.min(520, startHeight + delta));
+      setLowerPanelsHeight(next);
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [lowerPanelsHeight]);
+
+  const restoreDeskLayout = useCallback(() => {
+    setShowRightRail(true);
+    setShowMicroPanels(true);
+    setFocusChartMode(false);
+    setRightRailWidth(360);
+    setLowerPanelsHeight(250);
+  }, []);
+
   return (
     <div className="terminal-shell">
       <header className="terminal-topbar">
@@ -767,31 +819,62 @@ export default function App() {
           {activeTab === 'trading-desk' ? (
             <div className="main-desk">
               <div className="chart-column">
-                <TradingViewChartWorkspace state={market.state} active={activeTab === 'trading-desk'} />
+                <div className="chart-body">
+                  <TradingViewChartWorkspace state={market.state} active={activeTab === 'trading-desk'} />
+                </div>
                 <div className="desk-toolbar">
                   <button className="btn" onClick={() => setShowMicroPanels((current) => !current)}>
                     {showMicroPanels ? 'Hide CVD / Footprint / Liquidations' : 'Show CVD / Footprint / Liquidations'}
                   </button>
+                  <button className="btn" onClick={() => setShowRightRail((current) => !current)}>
+                    {showRightRail ? 'Hide Right Panel' : 'Show Right Panel'}
+                  </button>
+                  <button className="btn" onClick={() => setFocusChartMode((current) => !current)}>
+                    {focusChartMode ? 'Exit Chart Focus' : 'Chart Focus'}
+                  </button>
+                  <button className="btn" onClick={restoreDeskLayout}>
+                    Reset Layout
+                  </button>
                 </div>
-                {showMicroPanels ? (
-                  <div className="lower-panels">
-                    <CVDPanel points={market.state.cvd} />
-                    <FootprintPanel bins={market.state.footprint} />
-                    <LiquidationPanel events={market.state.liquidations} />
-                  </div>
+                {showMicroPanels && !focusChartMode ? (
+                  <>
+                    <div
+                      className="splitter-horizontal"
+                      role="separator"
+                      aria-orientation="horizontal"
+                      aria-label="Resize lower panels"
+                      onMouseDown={startLowerPanelsResize}
+                    />
+                    <div className="lower-panels" style={{ minHeight: `${lowerPanelsHeight}px`, maxHeight: `${lowerPanelsHeight}px` }}>
+                      <CVDPanel points={market.state.cvd} />
+                      <FootprintPanel bins={market.state.footprint} />
+                      <LiquidationPanel events={market.state.liquidations} />
+                    </div>
+                  </>
                 ) : null}
               </div>
-              <aside className="right-rail">
-                <OrderPanel
-                  activeTrade={activeTrade}
-                  tokens={tokens}
-                  onMoveProtection={handleMoveProtection}
-                  onPlaceOrder={handlePlaceOrder}
-                  onCloseActivePosition={handleCloseActivePosition}
-                />
-                <JournalSidebar activeTrade={activeTrade} events={backendEvents} />
-                <AIAnalysisPanel disabled={!activeTrade || !tokens} onRequestAnalysis={handleRequestAnalysis} />
-              </aside>
+              {showRightRail && !focusChartMode ? (
+                <>
+                  <div
+                    className="splitter-vertical"
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize right panel"
+                    onMouseDown={startRightRailResize}
+                  />
+                  <aside className="right-rail" style={{ width: `${rightRailWidth}px` }}>
+                    <OrderPanel
+                      activeTrade={activeTrade}
+                      tokens={tokens}
+                      onMoveProtection={handleMoveProtection}
+                      onPlaceOrder={handlePlaceOrder}
+                      onCloseActivePosition={handleCloseActivePosition}
+                    />
+                    <JournalSidebar activeTrade={activeTrade} events={backendEvents} />
+                    <AIAnalysisPanel disabled={!activeTrade || !tokens} onRequestAnalysis={handleRequestAnalysis} />
+                  </aside>
+                </>
+              ) : null}
             </div>
           ) : null}
 
@@ -836,14 +919,137 @@ export default function App() {
             <ChatDesk backendUrl={backendUrl} tokens={tokens} activeTradeId={activeTradeId} />
           ) : null}
 
-          {['portfolio', 'cuentas', 'transacciones', 'alertas'].includes(activeTab) ? (
-            <section className="placeholder-workspace">
-              <h3>{desktopTabs.find((tab) => tab.id === activeTab)?.label}</h3>
-              <p>
-                Esta vista queda conectada al mismo backend desktop y será movida a paridad completa con los módulos web
-                en los siguientes commits del plan.
-              </p>
-              <JournalDashboardParity snapshot={dashboardSnapshot} title="Shared Journal Module Preview" />
+          {activeTab === 'portfolio' ? (
+            <section className="parity-panel">
+              <JournalDashboardParity snapshot={dashboardSnapshot} title="Portfolio Overview" />
+              <article className="parity-card">
+                <h3>Open Positions ({openTradesView.length})</h3>
+                <div className="mini-table">
+                  <div><b>ID</b><b>Symbol</b><b>Side</b><b>Entry</b><b>Status</b></div>
+                  {openTradesView.slice(0, 20).map((row, idx) => (
+                    <div key={`portfolio-open-${idx}`}>
+                      <span>#{readString(row, 'id', '-')}</span>
+                      <span>{readString(row, 'simbolo', '-')}</span>
+                      <span>{readString(row, 'direccion', '-')}</span>
+                      <span>{formatNumber(readNumber(row, 'precio_entrada'), 4)}</span>
+                      <span>{readString(row, 'estado', '-')}</span>
+                    </div>
+                  ))}
+                  {!openTradesView.length ? <p className="muted">No open positions.</p> : null}
+                </div>
+              </article>
+            </section>
+          ) : null}
+
+          {activeTab === 'cuentas' ? (
+            <section className="parity-panel">
+              <div className="parity-grid metrics">
+                <article>
+                  <span>Session User</span>
+                  <strong>{session?.user?.name || session?.user?.email || '-'}</strong>
+                </article>
+                <article>
+                  <span>Balance</span>
+                  <strong>{formatNumber(cockpit?.account?.balanceUsdt, 2)} USDT</strong>
+                </article>
+                <article>
+                  <span>Max Risk</span>
+                  <strong>{formatNumber(cockpit?.account?.maxRisk?.amount, 2)} USDT</strong>
+                </article>
+                <article>
+                  <span>Discipline</span>
+                  <strong>{cockpit?.discipline?.blocked ? 'Blocked' : 'Clear'}</strong>
+                </article>
+              </div>
+              <article className="parity-card">
+                <h3>Desktop Session</h3>
+                <p className="muted">Device: {session?.deviceSession?.clientName || '-'}</p>
+                <p className="muted">Platform: {session?.deviceSession?.clientPlatform || '-'}</p>
+                <p className="muted">Updated: {formatDateIso(session?.deviceSession?.updatedAt || null)}</p>
+                <p className="muted">Backend WSS: {backendWsStatus}</p>
+              </article>
+            </section>
+          ) : null}
+
+          {activeTab === 'transacciones' ? (
+            <section className="parity-panel">
+              <article className="parity-card">
+                <h3>Pending Orders ({pendingOrdersView.length})</h3>
+                <div className="mini-table">
+                  <div><b>ID</b><b>Symbol</b><b>Side</b><b>Entry</b><b>Status</b></div>
+                  {pendingOrdersView.slice(0, 28).map((row, idx) => (
+                    <div key={`pending-${idx}`}>
+                      <span>#{readString(row, 'id', '-')}</span>
+                      <span>{readString(row, 'simbolo', '-')}</span>
+                      <span>{readString(row, 'direccion', '-')}</span>
+                      <span>{formatNumber(readNumber(row, 'entry_price'), 4)}</span>
+                      <span>{readString(row, 'order_status', '-')}</span>
+                    </div>
+                  ))}
+                  {!pendingOrdersView.length ? <p className="muted">No pending orders.</p> : null}
+                </div>
+              </article>
+              <article className="parity-card">
+                <h3>Recent Event Stream</h3>
+                <div className="event-list">
+                  {backendEvents.slice(-40).reverse().map((event, index) => (
+                    <article key={`txn-event-${event.timestamp}-${index}`}>
+                      <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
+                      <b>{event.type}</b>
+                      <small>{readString(event.payload as Record<string, unknown>, 'source', '-')}</small>
+                    </article>
+                  ))}
+                  {!backendEvents.length ? <p className="muted">No events yet.</p> : null}
+                </div>
+              </article>
+            </section>
+          ) : null}
+
+          {activeTab === 'alertas' ? (
+            <section className="parity-panel">
+              <div className="parity-grid two-cols">
+                <article className="parity-card">
+                  <h3>Risk Alerts</h3>
+                  <p className={cockpit?.discipline?.blocked ? 'negative' : 'positive'}>
+                    {cockpit?.discipline?.blocked ? 'Trading cooldown active' : 'No active cooldown'}
+                  </p>
+                  <p className="muted">
+                    Remaining sec: {cockpit?.discipline?.remainingSeconds ?? 0}
+                  </p>
+                  <p className="muted">
+                    Blocked until: {formatDateIso(cockpit?.discipline?.blockedUntil || null)}
+                  </p>
+                </article>
+                <article className="parity-card">
+                  <h3>Connectivity Alerts</h3>
+                  <p className={/connected/i.test(backendWsStatus) ? 'positive' : 'negative'}>
+                    {backendWsStatus}
+                  </p>
+                  <p className="muted">
+                    Market stream: {market.status}
+                  </p>
+                  <p className="muted">
+                    Last sync: {formatDateIso(lastSyncAt)}
+                  </p>
+                </article>
+              </div>
+              <article className="parity-card">
+                <h3>Alert Event Feed</h3>
+                <div className="event-list">
+                  {backendEvents
+                    .filter((event) => event.type.includes('risk') || event.type.includes('snapshot') || event.type.includes('ai'))
+                    .slice(-28)
+                    .reverse()
+                    .map((event, index) => (
+                      <article key={`alert-event-${event.timestamp}-${index}`}>
+                        <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
+                        <b>{event.type}</b>
+                        <small>{readString(event.payload as Record<string, unknown>, 'source', '-')}</small>
+                      </article>
+                    ))}
+                  {!backendEvents.length ? <p className="muted">No alert events yet.</p> : null}
+                </div>
+              </article>
             </section>
           ) : null}
         </main>

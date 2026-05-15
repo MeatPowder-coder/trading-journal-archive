@@ -247,13 +247,53 @@ label {
 .orders-strip p { margin: 0; font-weight: 700; color: #fff; }
 
 .main-desk {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 350px;
+  display: flex;
+  align-items: stretch;
   gap: 12px;
   min-height: calc(100vh - 280px);
 }
 
-.chart-column { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.chart-column {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chart-body {
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+
+.splitter-vertical {
+  width: 10px;
+  border-radius: 10px;
+  border: 1px solid #12314e;
+  background: linear-gradient(180deg, #0b243a, #08192b);
+  cursor: col-resize;
+  align-self: stretch;
+  transition: 120ms ease;
+}
+
+.splitter-vertical:hover {
+  border-color: #1e90ff;
+}
+
+.splitter-horizontal {
+  height: 10px;
+  border-radius: 10px;
+  border: 1px solid #12314e;
+  background: linear-gradient(90deg, #0b243a, #08192b);
+  cursor: row-resize;
+  transition: 120ms ease;
+}
+
+.splitter-horizontal:hover {
+  border-color: #1e90ff;
+}
+
 .chart-shell { min-height: calc(100vh - 470px); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 
 .tradingview-container {
@@ -304,6 +344,7 @@ label {
   grid-template-columns: minmax(220px, 0.9fr) minmax(300px, 1.25fr) minmax(220px, 0.85fr);
   gap: 12px;
   min-height: 230px;
+  overflow: hidden;
 }
 
 .desk-toolbar {
@@ -359,7 +400,13 @@ label {
 .event-list article { display: grid; grid-template-columns: 52px 1fr auto; gap: 8px; border-bottom: 1px solid rgba(46, 74, 104, 0.45); padding-bottom: 7px; }
 .event-list small { color: var(--text-soft); }
 
-.right-rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.right-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  max-width: min(60vw, 620px);
+}
 .side-card { background: linear-gradient(180deg, rgba(9, 18, 31, 0.97), rgba(5, 10, 17, 0.94)); }
 
 .parity-panel {
@@ -684,7 +731,10 @@ label {
   .terminal-topbar { grid-template-columns: 1fr; }
   .status-stack { align-items: flex-start; }
   .risk-header { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .main-desk { grid-template-columns: 1fr; }
+  .main-desk { flex-direction: column; }
+  .splitter-vertical,
+  .splitter-horizontal { display: none; }
+  .right-rail { width: 100% !important; max-width: none; }
   .right-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); display: grid; }
   .tradingview-container { height: 560px; min-height: 560px; }
   .live-market-layout { grid-template-columns: 1fr; }
@@ -701,11 +751,16 @@ label {
   .actions,
   .session-strip,
   .orders-strip { flex-direction: column; align-items: stretch; }
+  .right-rail {
+    width: 100% !important;
+    max-width: none;
+    display: flex;
+    grid-template-columns: none;
+  }
   .settings-grid,
   .risk-header,
   .form-grid-two,
   .lower-panels,
-  .right-rail,
   .journal-parity-metrics,
   .journal-parity-grid,
   .parity-grid.metrics,
