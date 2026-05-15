@@ -1138,3 +1138,327 @@ label {
   .journal-parity-row { grid-template-columns: 64px 1fr 76px 90px 90px; font-size: 0.74rem; }
   .chat-compose { grid-template-columns: 1fr; }
 }
+
+/* --- Desktop Parity Theme (Web Journal Mirror) --- */
+:root {
+  --bg: #080312;
+  --panel: rgba(19, 10, 33, 0.78);
+  --panel-2: rgba(14, 7, 24, 0.88);
+  --line: rgba(182, 101, 255, 0.24);
+  --line-strong: rgba(0, 209, 255, 0.36);
+  --text-soft: #bb8fdb;
+  --blue: #22baff;
+  --green: #00e39a;
+  --red: #ff4d6d;
+  --amber: #ffb547;
+}
+
+body {
+  background:
+    radial-gradient(1200px 540px at 10% -22%, rgba(0, 199, 255, 0.11), transparent 56%),
+    radial-gradient(1100px 560px at 88% -20%, rgba(214, 77, 255, 0.14), transparent 58%),
+    linear-gradient(180deg, #080312 0%, #060111 36%, #04010d 100%);
+  color: #f7ecff;
+}
+
+.terminal-shell {
+  position: relative;
+  overflow: hidden;
+}
+
+.terminal-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.34;
+  background-image:
+    linear-gradient(rgba(0, 221, 255, 0.17) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(215, 102, 255, 0.16) 1px, transparent 1px);
+  background-size: 74px 74px;
+}
+
+.desktop-parity-shell {
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.desktop-parity-sidebar {
+  background: linear-gradient(180deg, rgba(20, 16, 28, 0.97), rgba(12, 8, 20, 0.97));
+  border: 1px solid rgba(185, 125, 255, 0.26);
+  border-radius: 18px;
+  padding: 10px 8px;
+  gap: 10px;
+  box-shadow:
+    0 12px 38px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.desktop-parity-brand {
+  display: grid;
+  place-items: center;
+}
+
+.desktop-parity-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  color: #ffe6ff;
+  border: 1px solid rgba(201, 120, 255, 0.5);
+  background: radial-gradient(circle at 30% 20%, rgba(0, 223, 255, 0.26), rgba(17, 11, 27, 0.97) 70%);
+  text-shadow: 0 0 12px rgba(0, 216, 255, 0.6);
+}
+
+.desktop-parity-nav {
+  gap: 8px;
+}
+
+.desktop-parity-link {
+  width: 100%;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid rgba(170, 98, 255, 0.27);
+  background: rgba(18, 11, 31, 0.92);
+  color: #e8d9ff;
+  transition: all 180ms ease;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+}
+
+.desktop-parity-link span {
+  display: none;
+}
+
+.desktop-parity-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(42, 205, 255, 0.64);
+  color: #ffffff;
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.35),
+    0 0 18px rgba(36, 193, 255, 0.21);
+}
+
+.desktop-parity-link.active {
+  border-color: rgba(42, 205, 255, 0.78);
+  color: #ffffff;
+  background: linear-gradient(180deg, rgba(27, 25, 52, 0.98), rgba(19, 13, 33, 0.98));
+  box-shadow:
+    0 0 0 1px rgba(42, 205, 255, 0.2),
+    0 0 24px rgba(34, 192, 255, 0.25);
+}
+
+.desktop-parity-sidebar-foot {
+  margin-top: auto;
+  gap: 8px;
+}
+
+.desktop-logout {
+  border-color: rgba(255, 96, 124, 0.45);
+  color: #ff8ca1;
+}
+
+.desktop-logout:hover {
+  border-color: rgba(255, 96, 124, 0.75);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.35),
+    0 0 18px rgba(255, 96, 124, 0.3);
+}
+
+.desktop-parity-main {
+  border: 1px solid rgba(182, 101, 255, 0.2);
+  background: rgba(8, 3, 18, 0.56);
+  border-radius: 22px;
+  box-shadow: 0 28px 78px rgba(0, 0, 0, 0.45);
+}
+
+.desktop-parity-header {
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  padding: 4px 4px 8px;
+  grid-template-columns: minmax(220px, 1fr) minmax(420px, auto);
+}
+
+.desktop-parity-header-main h1 {
+  font-size: clamp(2rem, 2.65vw, 2.85rem);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  color: #f8ecff;
+}
+
+.desktop-parity-header-main small {
+  color: #af79d8;
+  font-size: 0.98rem;
+}
+
+.desktop-parity-header-actions select,
+.symbol-controls select,
+.symbol-controls input,
+.text-input,
+textarea {
+  border-color: rgba(173, 109, 255, 0.34);
+  background: rgba(16, 10, 29, 0.86);
+  color: #f4eaff;
+}
+
+.desktop-parity-header-actions .status-chip {
+  border-color: rgba(42, 205, 255, 0.42);
+  background: rgba(17, 14, 33, 0.88);
+  color: #dbf8ff;
+}
+
+.risk-header article,
+.session-strip,
+.orders-strip,
+.desk-card,
+.side-card,
+.chart-shell,
+.desktop-native-dashboard,
+.parity-panel,
+.web-mirror-shell,
+.chat-sessions-panel,
+.chat-thread-panel,
+.parity-card,
+.journal-parity,
+.desktop-native-card {
+  border: 1px solid rgba(168, 97, 255, 0.31);
+  background: linear-gradient(180deg, rgba(19, 10, 33, 0.9), rgba(13, 8, 23, 0.9));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.016),
+    0 8px 30px rgba(0, 0, 0, 0.28);
+}
+
+.risk-header article strong,
+.desktop-metrics-grid strong,
+.journal-parity-metrics strong,
+.parity-grid.metrics strong {
+  font-size: 2.05rem;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+}
+
+.desktop-metrics-grid article,
+.journal-parity-metrics article,
+.parity-grid.metrics article {
+  border: 1px solid rgba(170, 98, 255, 0.31);
+  background: rgba(22, 13, 37, 0.87);
+}
+
+.desktop-native-head h2,
+.parity-panel h3,
+.chart-head h2,
+.card-title-row h3 {
+  color: #f8ecff;
+}
+
+.desktop-native-head span,
+.muted,
+.risk-header span,
+.tag,
+.journal-parity-title span {
+  color: #bb8fdb;
+}
+
+.positive {
+  color: #00e39a;
+  text-shadow: 0 0 18px rgba(0, 227, 154, 0.2);
+}
+
+.negative {
+  color: #ff4d6d;
+  text-shadow: 0 0 16px rgba(255, 77, 109, 0.2);
+}
+
+.btn {
+  border-color: rgba(170, 98, 255, 0.38);
+  background: rgba(20, 11, 34, 0.9);
+  color: #f8ecff;
+}
+
+.btn-primary {
+  border-color: rgba(54, 199, 255, 0.72);
+  background: linear-gradient(180deg, rgba(27, 116, 255, 0.88), rgba(20, 86, 205, 0.88));
+}
+
+.btn-danger {
+  border-color: rgba(255, 89, 124, 0.74);
+  background: linear-gradient(180deg, rgba(214, 45, 78, 0.92), rgba(159, 27, 52, 0.9));
+}
+
+.workspace-tab,
+.micro-tabs button {
+  border-color: rgba(170, 98, 255, 0.36);
+  background: rgba(20, 11, 33, 0.88);
+  color: #e8d9ff;
+}
+
+.workspace-tab.active,
+.micro-tabs button.active {
+  border-color: rgba(36, 193, 255, 0.86);
+  background: linear-gradient(180deg, rgba(23, 100, 219, 0.84), rgba(18, 72, 158, 0.84));
+  color: #ffffff;
+}
+
+.watchlist-item {
+  border-color: rgba(170, 98, 255, 0.35);
+  background: rgba(18, 11, 31, 0.9);
+}
+
+.watchlist-item.active {
+  border-color: rgba(42, 205, 255, 0.78);
+  background: linear-gradient(180deg, rgba(29, 25, 54, 0.95), rgba(18, 13, 34, 0.95));
+}
+
+.desktop-native-dashboard,
+.parity-panel,
+.journal-parity {
+  animation: parityFadeIn 240ms ease;
+}
+
+@keyframes parityFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1180px) {
+  .desktop-parity-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .desktop-parity-sidebar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .desktop-parity-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .desktop-parity-link {
+    min-width: 44px;
+  }
+
+  .desktop-parity-sidebar-foot {
+    margin-top: 0;
+    flex-direction: row;
+  }
+}

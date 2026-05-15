@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { openUrl as openExternalUrl } from '@tauri-apps/plugin-opener';
+import {
+  BellRing,
+  CandlestickChart,
+  CircleDollarSign,
+  LayoutDashboard,
+  LogOut,
+  MessageSquareMore,
+  Radar,
+  UserRound,
+  WalletCards,
+} from 'lucide-react';
 import { buildDashboardSnapshotFromDesktop } from '@trading-journal/journal-data';
 import { JournalDashboardParity } from '@trading-journal/journal-ui';
 import { AIAnalysisPanel } from './components/AIAnalysisPanel';
@@ -170,14 +181,14 @@ const marketSymbols: Record<MarketType, string[]> = {
   ],
 };
 const desktopTabs = [
-  { id: 'trading-desk', label: 'Trading Desk' },
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'live-market', label: 'Live Market Activity' },
-  { id: 'chat', label: 'Chat' },
-  { id: 'portfolio', label: 'Portfolio' },
-  { id: 'cuentas', label: 'Cuentas' },
-  { id: 'transacciones', label: 'Transacciones' },
-  { id: 'alertas', label: 'Alertas' },
+  { id: 'trading-desk', label: 'Trading Desk', icon: CandlestickChart },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'live-market', label: 'Live Market Activity', icon: Radar },
+  { id: 'chat', label: 'Chat', icon: MessageSquareMore },
+  { id: 'portfolio', label: 'Portfolio', icon: WalletCards },
+  { id: 'cuentas', label: 'Cuentas', icon: UserRound },
+  { id: 'transacciones', label: 'Transacciones', icon: CircleDollarSign },
+  { id: 'alertas', label: 'Alertas', icon: BellRing },
 ] as const;
 
 type DesktopTabId = typeof desktopTabs[number]['id'];
@@ -831,26 +842,42 @@ export default function App() {
         <main className="desktop-parity-shell">
           <aside className="desktop-parity-sidebar">
             <div className="desktop-parity-brand">
-              <p className="eyebrow">Desktop</p>
-              <h2>Trading Journal</h2>
+              <span className="desktop-parity-badge">TJ</span>
             </div>
             <nav className="desktop-parity-nav">
-              {desktopTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  className={activeTab === tab.id ? 'desktop-parity-link active' : 'desktop-parity-link'}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
+              {desktopTabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    className={activeTab === tab.id ? 'desktop-parity-link active' : 'desktop-parity-link'}
+                    onClick={() => setActiveTab(tab.id)}
+                    title={tab.label}
+                    aria-label={tab.label}
+                  >
+                    <Icon size={18} />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
             </nav>
             <div className="desktop-parity-sidebar-foot">
-              <button className={useWebMirrorTabs ? 'btn btn-primary' : 'btn'} onClick={() => setUseWebMirrorTabs((value) => !value)}>
-                {useWebMirrorTabs ? 'Mirror Web (TEMP)' : 'Native Mode'}
+              <button
+                className={useWebMirrorTabs ? 'desktop-parity-link active' : 'desktop-parity-link'}
+                onClick={() => setUseWebMirrorTabs((value) => !value)}
+                title={useWebMirrorTabs ? 'Web Mirror (TEMP)' : 'Native Mode'}
+                aria-label={useWebMirrorTabs ? 'Web Mirror (TEMP)' : 'Native Mode'}
+              >
+                <span>{useWebMirrorTabs ? 'WEB' : 'NAT'}</span>
               </button>
-              <button className="btn btn-danger" onClick={handleSignOutDevice} disabled={busy || !tokens}>
-                Sign out
+              <button
+                className="desktop-parity-link desktop-logout"
+                onClick={handleSignOutDevice}
+                disabled={busy || !tokens}
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <LogOut size={16} />
               </button>
             </div>
           </aside>
