@@ -23,7 +23,6 @@ import {
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { signOut } from "next-auth/react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/sheet";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { useState } from "react";
 
 // Helper for content (reused)
@@ -187,10 +186,10 @@ export function MobileSidebar() {
                 </Button>
             </SheetTrigger>
             <SheetContent side="left" className="p-0 bg-zinc-900 border-r-zinc-800 w-72 text-white border-none flex flex-col">
-                <VisuallyHidden>
+                <div className="sr-only">
                     <SheetTitle>Navigation Menu</SheetTitle>
                     <SheetDescription>Main application navigation</SheetDescription>
-                </VisuallyHidden>
+                </div>
                 <SidebarContent collapsed={false} />
             </SheetContent>
         </Sheet>

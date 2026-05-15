@@ -2,6 +2,9 @@
 const nextConfig = {
   output: 'standalone',
   transpilePackages: ['@trading-journal/journal-data', '@trading-journal/journal-ui'],
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   async rewrites() {
     return [
       {

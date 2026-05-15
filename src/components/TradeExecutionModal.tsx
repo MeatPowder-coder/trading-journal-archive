@@ -1123,7 +1123,7 @@ export function TradeExecutionModal({
                           <XAxis dataKey="label" minTickGap={36} tick={{ fontSize: 10 }} />
                           <YAxis orientation="right" tick={{ fontSize: 10 }} domain={['auto', 'auto']} />
                           <Tooltip
-                            formatter={(value: any, name?: string) => {
+                            formatter={(value: any, name?: any) => {
                               if (name === "rr") return [Number(value).toFixed(2), "RR"];
                               return [Number(value).toFixed(4), "Precio"];
                             }}
@@ -1219,7 +1219,7 @@ export function TradeExecutionModal({
                           <XAxis dataKey="label" minTickGap={36} tick={{ fontSize: 10 }} />
                           <YAxis orientation="right" tick={{ fontSize: 10 }} domain={['auto', 'auto']} />
                           <Tooltip
-                            formatter={(value: any, name?: string) => {
+                            formatter={(value: any, name?: any) => {
                               if (name === "price") return [Number(value).toFixed(4), "Precio"];
                               if (name === "sl") return [Number(value).toFixed(4), "SL"];
                               return [Number(value).toFixed(2), "RR"];

@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.github
+.codex
+.agents
+apps/desktop/node_modules
+apps/desktop/dist
+apps/desktop/src-tauri/target
+apps/api/dist
+packages/shared/dist
+*.log
+dev.log
+workflow*.json
+conversations.json
