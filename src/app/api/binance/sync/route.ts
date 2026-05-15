@@ -1,27 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { query } from '@/lib/db';
 import { getAuthSession } from '@/lib/auth';
 import { calculateAndPersistRrMetrics, recomputeConsecutiveLossRule, sendDailySummaryIfEligible } from '@/lib/trading/discipline';
-
-const API_KEY = process.env.BINANCE_FUTURES_API_KEY!;
-const SECRET = process.env.BINANCE_FUTURES_API_SECRET!;
-const BASE = 'https://fapi.binance.com';
-
-function sign(qs: string) {
-    return crypto.createHmac('sha256', SECRET).update(qs).digest('hex');
-}
-
-async function binanceFetch(path: string, params: Record<string, string | number> = {}) {
-    const ts = Date.now();
-    const qs = new URLSearchParams({ ...params as any, timestamp: String(ts) }).toString();
-    const sig = sign(qs);
-    const res = await fetch(`${BASE}${path}?${qs}&signature=${sig}`, {
-        headers: { 'X-MBX-APIKEY': API_KEY },
-    });
-    if (!res.ok) throw new Error(`Binance ${path}: ${await res.text()}`);
-    return res.json();
-}
+import { ensureFuturesCredentials, futuresSignedRequest } from '@/lib/trading/binance-futures';
 
 /**
  * pnl_realizado is GENERATED ALWAYS:
@@ -60,7 +41,9 @@ export async function POST(req: NextRequest) {
         const session = await getAuthSession();
         if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-        if (!API_KEY || !SECRET) {
+        try {
+            ensureFuturesCredentials();
+        } catch {
             return NextResponse.json({ error: 'Binance API keys not configured' }, { status: 500 });
         }
 
@@ -100,13 +83,13 @@ export async function POST(req: NextRequest) {
         //    - REALIZED_PNL = gross PnL from price movement  
         //    - COMMISSION   = trading fees paid
         const fetchIncome = async (incomeType: string) => {
-            const events: any[] = await binanceFetch('/fapi/v1/income', {
+            const events: any[] = await futuresSignedRequest('/fapi/v1/income', {
                 symbol: trade.simbolo,
                 incomeType,
                 startTime: startMs,
                 endTime: endMs,
                 limit: 100,
-            });
+            }, 'GET');
             return events.reduce((sum: number, e: any) => sum + Number(e.income || 0), 0);
         };
 
@@ -123,12 +106,12 @@ export async function POST(req: NextRequest) {
         }
 
         // 4. Get the exit price timestamp from last fill
-        const userTrades: any[] = await binanceFetch('/fapi/v1/userTrades', {
+        const userTrades: any[] = await futuresSignedRequest('/fapi/v1/userTrades', {
             symbol: trade.simbolo,
             startTime: startMs,
             endTime: endMs,
             limit: 100,
-        });
+        }, 'GET');
         const lastFill = userTrades.length > 0 ? userTrades[userTrades.length - 1] : null;
         const closedAt = lastFill
             ? new Date(Number(lastFill.time)).toISOString()

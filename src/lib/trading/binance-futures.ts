@@ -4,6 +4,11 @@ import { query } from '@/lib/db';
 const BASE_URL = 'https://fapi.binance.com';
 const BINANCE_FUTURES_API_KEY = process.env.BINANCE_FUTURES_API_KEY || '';
 const BINANCE_FUTURES_API_SECRET = process.env.BINANCE_FUTURES_API_SECRET || '';
+const TIME_SYNC_TTL_MS = 60_000;
+const DEFAULT_RECV_WINDOW_MS = 10_000;
+
+let serverTimeOffsetMs = 0;
+let lastTimeSyncAtMs = 0;
 
 export type FuturesRequestMethod = 'GET' | 'POST' | 'DELETE';
 export type ProtectiveOrderType = 'STOP_MARKET' | 'TAKE_PROFIT_MARKET';
@@ -63,6 +68,46 @@ function parseBinanceErrorPayload(rawText: string) {
   }
 }
 
+async function refreshServerTimeOffset(force = false) {
+  const now = Date.now();
+  if (!force && now - lastTimeSyncAtMs < TIME_SYNC_TTL_MS) return serverTimeOffsetMs;
+
+  const response = await fetch(`${BASE_URL}/fapi/v1/time`, { cache: 'no-store' });
+  if (!response.ok) {
+    if (force) {
+      const text = await response.text().catch(() => '');
+      throw new BinanceFuturesError(
+        `Binance time sync error (${response.status})${text ? `: ${text}` : ''}`,
+        {
+          status: 502,
+          path: '/fapi/v1/time',
+          method: 'GET',
+          raw: text || null,
+        }
+      );
+    }
+    return serverTimeOffsetMs;
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  const serverTime = asFiniteNumber((payload as any)?.serverTime, NaN);
+  if (!Number.isFinite(serverTime) || serverTime <= 0) {
+    if (force) {
+      throw new BinanceFuturesError('Binance time sync payload inválido.', {
+        status: 502,
+        path: '/fapi/v1/time',
+        method: 'GET',
+        raw: JSON.stringify(payload || {}),
+      });
+    }
+    return serverTimeOffsetMs;
+  }
+
+  serverTimeOffsetMs = serverTime - Date.now();
+  lastTimeSyncAtMs = Date.now();
+  return serverTimeOffsetMs;
+}
+
 export function ensureFuturesCredentials() {
   if (!BINANCE_FUTURES_API_KEY || !BINANCE_FUTURES_API_SECRET) {
     throw new BinanceFuturesError('Missing Binance Futures API keys', {
@@ -112,33 +157,53 @@ export async function futuresSignedRequest<T = any>(
   method: FuturesRequestMethod = 'GET'
 ): Promise<T> {
   const { apiKey, secret } = ensureFuturesCredentials();
-
-  const normalized: Record<string, string> = {};
-  for (const [k, v] of Object.entries(params)) {
-    if (v === undefined || v === null) continue;
-    normalized[k] = String(v);
-  }
-  if (!normalized.timestamp) normalized.timestamp = String(Date.now());
-
-  const qs = new URLSearchParams(normalized).toString();
-  const signature = sign(qs, secret);
-  const url = `${BASE_URL}${path}?${qs}&signature=${signature}`;
-
-  const response = await fetch(url, {
-    method,
-    headers: { 'X-MBX-APIKEY': apiKey },
-  });
-
-  const text = await response.text();
-  let parsed: any = null;
   try {
-    parsed = text ? JSON.parse(text) : null;
+    await refreshServerTimeOffset(false);
   } catch {
-    parsed = null;
+    // best-effort sync; we'll still attempt request and only hard-fail on explicit Binance errors.
   }
 
-  if (!response.ok) {
+  const requestOnce = async () => {
+    const normalized: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v === undefined || v === null) continue;
+      normalized[k] = String(v);
+    }
+    if (!normalized.timestamp) normalized.timestamp = String(Date.now() + serverTimeOffsetMs);
+    if (!normalized.recvWindow) normalized.recvWindow = String(DEFAULT_RECV_WINDOW_MS);
+
+    const qs = new URLSearchParams(normalized).toString();
+    const signature = sign(qs, secret);
+    const url = `${BASE_URL}${path}?${qs}&signature=${signature}`;
+
+    const response = await fetch(url, {
+      method,
+      headers: { 'X-MBX-APIKEY': apiKey },
+    });
+
+    const text = await response.text();
+    let parsed: any = null;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      parsed = null;
+    }
     const payload = parseBinanceErrorPayload(text || '');
+    return { response, text, parsed, payload };
+  };
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const { response, text, parsed, payload } = await requestOnce();
+
+    if (response.ok) {
+      return (parsed as T) ?? ({} as T);
+    }
+
+    if (payload.code === -1021 && attempt === 0) {
+      await refreshServerTimeOffset(true);
+      continue;
+    }
+
     throw new BinanceFuturesError(
       `Binance signed API error (${response.status})${payload.msg ? `: ${payload.msg}` : ''}`,
       {
@@ -152,7 +217,11 @@ export async function futuresSignedRequest<T = any>(
     );
   }
 
-  return (parsed as T) ?? ({} as T);
+  throw new BinanceFuturesError('Binance signed API error: exhausted retry attempts.', {
+    status: 502,
+    path,
+    method,
+  });
 }
 
 export function isOrderTypeUnsupported(error: unknown) {
