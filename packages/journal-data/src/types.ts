@@ -38,6 +38,25 @@ export interface JournalRecentTradeRow {
   pnl: number;
 }
 
+export interface JournalTimelinePoint {
+  date: string;
+  pnl: number;
+  cumulative: number;
+}
+
+export interface JournalSLEvolutionPoint {
+  date: string;
+  moves: number;
+  riskUp: number;
+  rrAvg: number;
+}
+
+export interface JournalHeatmapPoint {
+  date: string;
+  pnl: number;
+  trades: number;
+}
+
 export interface JournalPerformanceSnapshot {
   totalPnL: number;
   winRate: number;
@@ -49,8 +68,13 @@ export interface JournalPerformanceSnapshot {
   slRespectedPct: number;
   rrActualAvg: number;
   mfeEfficiencyPct: number;
+  avgPnlSlRespected: number;
+  avgPnlSlMovedRiskUp: number;
   closedTradesCount: number;
   loadedTradesCount: number;
   mentalStatePerformance: JournalMentalStatePerformanceRow[];
   recentTrades: JournalRecentTradeRow[];
+  pnlTimeline: JournalTimelinePoint[];
+  slEvolution: JournalSLEvolutionPoint[];
+  heatmap: JournalHeatmapPoint[];
 }

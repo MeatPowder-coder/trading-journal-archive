@@ -64,6 +64,19 @@ function normalizeDate(raw: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
+function toDateKey(raw: unknown) {
+  if (typeof raw !== 'string' || !raw.trim()) return '';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+}
+
+function toDateLabel(dateKey: string) {
+  const [year, month, day] = dateKey.split('-');
+  if (!year || !month || !day) return dateKey;
+  return `${day}/${month}`;
+}
+
 export function buildPerformanceSnapshotFromDesktopTrades(
   trades: Array<Record<string, unknown>> | null | undefined
 ): JournalPerformanceSnapshot {
@@ -99,6 +112,21 @@ export function buildPerformanceSnapshotFromDesktopTrades(
       if (rrMax <= 0) return sum;
       return sum + ((rrAct / rrMax) * 100);
     }, 0) / mfeTrades.length
+    : 0;
+
+  const slRespectedTrades = closedTrades.filter(
+    (trade) => String(trade.sl_move_direction || 'not_moved') !== 'risk_increase'
+  );
+  const slMovedRiskUpTrades = closedTrades.filter(
+    (trade) => String(trade.sl_move_direction || '') === 'risk_increase'
+  );
+
+  const avgPnlSlRespected = slRespectedTrades.length
+    ? slRespectedTrades.reduce((sum, trade) => sum + (readNumber(trade, 'pnl_realizado') ?? 0), 0) / slRespectedTrades.length
+    : 0;
+
+  const avgPnlSlMovedRiskUp = slMovedRiskUpTrades.length
+    ? slMovedRiskUpTrades.reduce((sum, trade) => sum + (readNumber(trade, 'pnl_realizado') ?? 0), 0) / slMovedRiskUpTrades.length
     : 0;
 
   const mentalStatePerformance = Array.from(
@@ -137,6 +165,57 @@ export function buildPerformanceSnapshotFromDesktopTrades(
     pnl: readNumber(trade, 'pnl_realizado') ?? 0,
   })) as JournalRecentTradeRow[];
 
+  const pnlByDate = closedTrades.reduce((acc, trade) => {
+    const dateKey = toDateKey(trade.fecha_cierre) || toDateKey(trade.fecha_apertura);
+    if (!dateKey) return acc;
+    const current = acc.get(dateKey) || { pnl: 0, trades: 0 };
+    current.pnl += readNumber(trade, 'pnl_realizado') ?? 0;
+    current.trades += 1;
+    acc.set(dateKey, current);
+    return acc;
+  }, new Map<string, { pnl: number; trades: number }>());
+
+  const orderedPnlDates = Array.from(pnlByDate.entries()).sort(([a], [b]) => a.localeCompare(b));
+  let cumulative = 0;
+  const pnlTimeline = orderedPnlDates.map(([dateKey, value]) => {
+    cumulative += value.pnl;
+    return {
+      date: toDateLabel(dateKey),
+      pnl: Number(value.pnl.toFixed(2)),
+      cumulative: Number(cumulative.toFixed(2)),
+    };
+  });
+
+  const heatmap = orderedPnlDates.map(([dateKey, value]) => ({
+    date: dateKey,
+    pnl: Number(value.pnl.toFixed(2)),
+    trades: value.trades,
+  }));
+
+  const slEvolutionMap = closedTrades.reduce((acc, trade) => {
+    const dateKey = toDateKey(trade.fecha_cierre) || toDateKey(trade.fecha_apertura);
+    if (!dateKey) return acc;
+    const current = acc.get(dateKey) || { moves: 0, riskUp: 0, rrTotal: 0, rrCount: 0 };
+    current.moves += Number(trade.sl_move_count || 0);
+    if (String(trade.sl_move_direction || '') === 'risk_increase') current.riskUp += 1;
+    const rr = readNumber(trade, 'rr_actual');
+    if (typeof rr === 'number' && Number.isFinite(rr) && rr > 0) {
+      current.rrTotal += rr;
+      current.rrCount += 1;
+    }
+    acc.set(dateKey, current);
+    return acc;
+  }, new Map<string, { moves: number; riskUp: number; rrTotal: number; rrCount: number }>());
+
+  const slEvolution = Array.from(slEvolutionMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dateKey, row]) => ({
+      date: toDateLabel(dateKey),
+      moves: row.moves,
+      riskUp: row.riskUp,
+      rrAvg: row.rrCount ? Number((row.rrTotal / row.rrCount).toFixed(2)) : 0,
+    }));
+
   return {
     totalPnL,
     winRate,
@@ -148,9 +227,14 @@ export function buildPerformanceSnapshotFromDesktopTrades(
     slRespectedPct,
     rrActualAvg,
     mfeEfficiencyPct,
+    avgPnlSlRespected,
+    avgPnlSlMovedRiskUp,
     closedTradesCount: closedTrades.length,
     loadedTradesCount: rows.length,
     mentalStatePerformance,
     recentTrades,
+    pnlTimeline,
+    slEvolution,
+    heatmap,
   };
 }

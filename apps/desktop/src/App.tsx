@@ -1035,7 +1035,6 @@ export default function App() {
           {activeTab === 'dashboard' && !useWebMirrorTabs ? (
             <section className="parity-panel">
               <JournalPerformanceParity snapshot={performanceSnapshot} heroTitle="Dashboard" showHero={false} showTitleRow={false} />
-              <JournalDashboardParity snapshot={dashboardSnapshot} title="Desktop Journal Snapshot" />
             </section>
           ) : null}
 
