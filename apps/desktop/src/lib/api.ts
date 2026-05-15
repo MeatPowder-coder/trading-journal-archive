@@ -27,12 +27,42 @@ function apiBaseUrl(baseUrl: string) {
   return normalizeBaseUrl(explicit || baseUrl);
 }
 
+function apiFallbackBaseUrls(baseUrl: string) {
+  const fallbacks: string[] = [];
+  const explicit = (import.meta.env.VITE_API_FALLBACK_URL || '').trim();
+  if (explicit) {
+    fallbacks.push(normalizeBaseUrl(explicit));
+  }
+
+  if (import.meta.env.DEV) {
+    fallbacks.push('http://127.0.0.1:4000');
+  }
+
+  const primary = apiBaseUrl(baseUrl);
+  return Array.from(new Set(fallbacks.filter((candidate) => candidate && candidate !== primary)));
+}
+
 function wsBaseUrl(baseUrl: string) {
   const explicit = (import.meta.env.VITE_WS_URL || '').trim();
   const normalized = normalizeBaseUrl(explicit || baseUrl);
   if (normalized.startsWith('https://')) return `wss://${normalized.slice('https://'.length)}`;
   if (normalized.startsWith('http://')) return `ws://${normalized.slice('http://'.length)}`;
   return normalized;
+}
+
+function wsFallbackBaseUrls(baseUrl: string) {
+  const fallbacks: string[] = [];
+  const explicit = (import.meta.env.VITE_WS_FALLBACK_URL || '').trim();
+  if (explicit) {
+    fallbacks.push(normalizeBaseUrl(explicit));
+  }
+
+  if (import.meta.env.DEV) {
+    fallbacks.push('ws://127.0.0.1:4000');
+  }
+
+  const primary = wsBaseUrl(baseUrl);
+  return Array.from(new Set(fallbacks.filter((candidate) => candidate && candidate !== primary)));
 }
 
 async function parseJsonOrThrow<T>(response: Response): Promise<T> {
@@ -57,6 +87,35 @@ async function parseJsonOrThrow<T>(response: Response): Promise<T> {
 
 function authHeaders(accessToken?: string): Record<string, string> {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
+
+function shouldTryApiFallback(status: number) {
+  return status === 404 || status === 405 || status === 500 || status === 501 || status === 502 || status === 503;
+}
+
+async function fetchApiJsonWithFallback<T>(params: {
+  baseUrl: string;
+  path: string;
+  init?: RequestInit;
+}) {
+  const candidates = [apiBaseUrl(params.baseUrl), ...apiFallbackBaseUrls(params.baseUrl)];
+  let lastError: unknown = new Error('Request failed');
+
+  for (let i = 0; i < candidates.length; i += 1) {
+    const url = `${candidates[i]}${params.path}`;
+    try {
+      const response = await fetch(url, params.init);
+      if (i < candidates.length - 1 && shouldTryApiFallback(response.status)) {
+        continue;
+      }
+      return parseJsonOrThrow<T>(response);
+    } catch (error) {
+      lastError = error;
+      if (i < candidates.length - 1) continue;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Request failed');
 }
 
 export async function startDesktopPairing(params: {
@@ -123,10 +182,13 @@ export async function fetchDesktopSession(params: {
   accessToken: string;
 }) {
   try {
-    const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/desktop/session`, {
-      headers: authHeaders(params.accessToken),
+    return await fetchApiJsonWithFallback<DesktopSessionResponse>({
+      baseUrl: params.baseUrl,
+      path: '/v1/desktop/session',
+      init: {
+        headers: authHeaders(params.accessToken),
+      },
     });
-    return parseJsonOrThrow<DesktopSessionResponse>(res);
   } catch {
     const legacy = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/session`, {
       headers: authHeaders(params.accessToken),
@@ -140,10 +202,13 @@ export async function fetchDesktopCockpit(params: {
   accessToken: string;
 }) {
   try {
-    const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/desktop/cockpit`, {
-      headers: authHeaders(params.accessToken),
+    return await fetchApiJsonWithFallback<DesktopCockpitResponse>({
+      baseUrl: params.baseUrl,
+      path: '/v1/desktop/cockpit',
+      init: {
+        headers: authHeaders(params.accessToken),
+      },
     });
-    return parseJsonOrThrow<DesktopCockpitResponse>(res);
   } catch {
     const legacy = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/cockpit`, {
       headers: authHeaders(params.accessToken),
@@ -156,10 +221,13 @@ export async function fetchDesktopBootstrap(params: {
   baseUrl: string;
   accessToken: string;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/desktop/bootstrap`, {
-    headers: authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<DesktopBootstrapResponse>({
+    baseUrl: params.baseUrl,
+    path: '/v1/desktop/bootstrap',
+    init: {
+      headers: authHeaders(params.accessToken),
+    },
   });
-  return parseJsonOrThrow<DesktopBootstrapResponse>(res);
 }
 
 export async function createSLTPMove(params: {
@@ -168,15 +236,18 @@ export async function createSLTPMove(params: {
   tradeId: string | number;
   input: SLTPMoveInput;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/trades/${params.tradeId}/sltp-moves`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<{ success: boolean; move: Record<string, unknown> }>({
+    baseUrl: params.baseUrl,
+    path: `/v1/trades/${params.tradeId}/sltp-moves`,
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify(params.input),
     },
-    body: JSON.stringify(params.input),
   });
-  return parseJsonOrThrow<{ success: boolean; move: Record<string, unknown> }>(res);
 }
 
 export async function createChartSnapshot(params: {
@@ -185,15 +256,18 @@ export async function createChartSnapshot(params: {
   tradeId: string | number;
   input: ChartSnapshotInput;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/trades/${params.tradeId}/snapshots`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<{ success: boolean; snapshot: Record<string, unknown> }>({
+    baseUrl: params.baseUrl,
+    path: `/v1/trades/${params.tradeId}/snapshots`,
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify(params.input),
     },
-    body: JSON.stringify(params.input),
   });
-  return parseJsonOrThrow<{ success: boolean; snapshot: Record<string, unknown> }>(res);
 }
 
 export async function requestAIAnalysis(params: {
@@ -202,15 +276,18 @@ export async function requestAIAnalysis(params: {
   tradeId: string | number;
   input: AIAnalysisInput;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/trades/${params.tradeId}/ai-analysis`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<{ success: boolean; analysis: Record<string, unknown> }>({
+    baseUrl: params.baseUrl,
+    path: `/v1/trades/${params.tradeId}/ai-analysis`,
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify(params.input),
     },
-    body: JSON.stringify(params.input),
   });
-  return parseJsonOrThrow<{ success: boolean; analysis: Record<string, unknown> }>(res);
 }
 
 export async function placeMarketOrder(params: {
@@ -218,15 +295,18 @@ export async function placeMarketOrder(params: {
   accessToken: string;
   body: Record<string, unknown>;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/orders/market`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<Record<string, unknown>>({
+    baseUrl: params.baseUrl,
+    path: '/v1/orders/market',
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify(params.body),
     },
-    body: JSON.stringify(params.body),
   });
-  return parseJsonOrThrow<Record<string, unknown>>(res);
 }
 
 export async function placeLimitOrder(params: {
@@ -234,15 +314,18 @@ export async function placeLimitOrder(params: {
   accessToken: string;
   body: Record<string, unknown>;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/orders/limit`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<Record<string, unknown>>({
+    baseUrl: params.baseUrl,
+    path: '/v1/orders/limit',
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify(params.body),
     },
-    body: JSON.stringify(params.body),
   });
-  return parseJsonOrThrow<Record<string, unknown>>(res);
 }
 
 export async function editLimitOrder(params: {
@@ -251,15 +334,18 @@ export async function editLimitOrder(params: {
   orderId: number;
   body: Record<string, unknown>;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/orders/${params.orderId}`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<Record<string, unknown>>({
+    baseUrl: params.baseUrl,
+    path: `/v1/orders/${params.orderId}`,
+    init: {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify(params.body),
     },
-    body: JSON.stringify(params.body),
   });
-  return parseJsonOrThrow<Record<string, unknown>>(res);
 }
 
 export async function cancelLimitOrder(params: {
@@ -268,15 +354,18 @@ export async function cancelLimitOrder(params: {
   orderId: number;
   reason?: string;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/orders/${params.orderId}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<Record<string, unknown>>({
+    baseUrl: params.baseUrl,
+    path: `/v1/orders/${params.orderId}`,
+    init: {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify({ reason: params.reason || null }),
     },
-    body: JSON.stringify({ reason: params.reason || null }),
   });
-  return parseJsonOrThrow<Record<string, unknown>>(res);
 }
 
 export async function closePosition(params: {
@@ -286,18 +375,21 @@ export async function closePosition(params: {
   tradeId?: number;
   closePercent?: number;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/positions/${encodeURIComponent(params.symbol)}/close`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<Record<string, unknown>>({
+    baseUrl: params.baseUrl,
+    path: `/v1/positions/${encodeURIComponent(params.symbol)}/close`,
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify({
+        tradeId: params.tradeId,
+        closePercent: params.closePercent ?? 100,
+      }),
     },
-    body: JSON.stringify({
-      tradeId: params.tradeId,
-      closePercent: params.closePercent ?? 100,
-    }),
   });
-  return parseJsonOrThrow<Record<string, unknown>>(res);
 }
 
 export async function updatePositionProtection(params: {
@@ -306,15 +398,18 @@ export async function updatePositionProtection(params: {
   symbol: string;
   body: Record<string, unknown>;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/positions/${encodeURIComponent(params.symbol)}/sltp`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<Record<string, unknown>>({
+    baseUrl: params.baseUrl,
+    path: `/v1/positions/${encodeURIComponent(params.symbol)}/sltp`,
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify(params.body),
     },
-    body: JSON.stringify(params.body),
   });
-  return parseJsonOrThrow<Record<string, unknown>>(res);
 }
 
 export async function listChatSessions(params: {
@@ -323,13 +418,18 @@ export async function listChatSessions(params: {
   tradeId?: number;
   pendingOrderId?: number;
 }) {
-  const url = new URL(`${apiBaseUrl(params.baseUrl)}/v1/chat/sessions`);
-  if (params.tradeId) url.searchParams.set('tradeId', String(params.tradeId));
-  if (params.pendingOrderId) url.searchParams.set('pendingOrderId', String(params.pendingOrderId));
-  const res = await fetch(url.toString(), {
-    headers: authHeaders(params.accessToken),
+  const qs = new URLSearchParams();
+  if (params.tradeId) qs.set('tradeId', String(params.tradeId));
+  if (params.pendingOrderId) qs.set('pendingOrderId', String(params.pendingOrderId));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+
+  return fetchApiJsonWithFallback<{ success: boolean; sessions: ChatSession[] }>({
+    baseUrl: params.baseUrl,
+    path: `/v1/chat/sessions${suffix}`,
+    init: {
+      headers: authHeaders(params.accessToken),
+    },
   });
-  return parseJsonOrThrow<{ success: boolean; sessions: ChatSession[] }>(res);
 }
 
 export async function createChatSession(params: {
@@ -342,15 +442,18 @@ export async function createChatSession(params: {
     agentType?: string;
   };
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/chat/sessions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<{ success: boolean; session: ChatSession }>({
+    baseUrl: params.baseUrl,
+    path: '/v1/chat/sessions',
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify(params.body),
     },
-    body: JSON.stringify(params.body),
   });
-  return parseJsonOrThrow<{ success: boolean; session: ChatSession }>(res);
 }
 
 export async function listChatMessages(params: {
@@ -358,12 +461,14 @@ export async function listChatMessages(params: {
   accessToken: string;
   sessionId: number;
 }) {
-  const url = new URL(`${apiBaseUrl(params.baseUrl)}/v1/chat/messages`);
-  url.searchParams.set('sessionId', String(params.sessionId));
-  const res = await fetch(url.toString(), {
-    headers: authHeaders(params.accessToken),
+  const qs = new URLSearchParams({ sessionId: String(params.sessionId) });
+  return fetchApiJsonWithFallback<{ success: boolean; messages: ChatMessage[] }>({
+    baseUrl: params.baseUrl,
+    path: `/v1/chat/messages?${qs.toString()}`,
+    init: {
+      headers: authHeaders(params.accessToken),
+    },
   });
-  return parseJsonOrThrow<{ success: boolean; messages: ChatMessage[] }>(res);
 }
 
 export async function createChatMessage(params: {
@@ -377,15 +482,18 @@ export async function createChatMessage(params: {
     fileType?: string | null;
   };
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/chat/messages`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<{ success: boolean; message: ChatMessage }>({
+    baseUrl: params.baseUrl,
+    path: '/v1/chat/messages',
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify(params.body),
     },
-    body: JSON.stringify(params.body),
   });
-  return parseJsonOrThrow<{ success: boolean; message: ChatMessage }>(res);
 }
 
 export async function streamChatMessage(params: {
@@ -395,19 +503,22 @@ export async function streamChatMessage(params: {
   message: string;
   model?: string;
 }) {
-  const res = await fetch(`${apiBaseUrl(params.baseUrl)}/v1/chat/stream`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(params.accessToken),
+  return fetchApiJsonWithFallback<{ success: boolean; model: string; assistantMessage: ChatMessage }>({
+    baseUrl: params.baseUrl,
+    path: '/v1/chat/stream',
+    init: {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(params.accessToken),
+      },
+      body: JSON.stringify({
+        sessionId: params.sessionId,
+        message: params.message,
+        model: params.model,
+      }),
     },
-    body: JSON.stringify({
-      sessionId: params.sessionId,
-      message: params.message,
-      model: params.model,
-    }),
   });
-  return parseJsonOrThrow<{ success: boolean; model: string; assistantMessage: ChatMessage }>(res);
 }
 
 export function connectDesktopEvents(params: {
@@ -416,20 +527,46 @@ export function connectDesktopEvents(params: {
   onEvent: (event: DesktopEvent) => void;
   onStatus?: (status: string) => void;
 }) {
-  const url = new URL(`${wsBaseUrl(params.baseUrl)}/v1/desktop/events`);
-  url.searchParams.set('token', params.accessToken);
+  const bases = [wsBaseUrl(params.baseUrl), ...wsFallbackBaseUrls(params.baseUrl)];
+  let activeSocket: WebSocket | null = null;
+  let closedByCaller = false;
+  let index = 0;
 
-  const socket = new WebSocket(url.toString());
-  socket.addEventListener('open', () => params.onStatus?.('Backend WSS connected'));
-  socket.addEventListener('close', () => params.onStatus?.('Backend WSS disconnected'));
-  socket.addEventListener('error', () => params.onStatus?.('Backend WSS error'));
-  socket.addEventListener('message', (message) => {
-    try {
-      params.onEvent(JSON.parse(String(message.data)) as DesktopEvent);
-    } catch {
-      params.onStatus?.('Ignored invalid backend event');
+  const connect = () => {
+    if (closedByCaller) return;
+    if (index >= bases.length) {
+      params.onStatus?.('Backend WSS unavailable');
+      return;
     }
-  });
 
-  return () => socket.close();
+    const base = bases[index];
+    const url = new URL(`${base}/v1/desktop/events`);
+    url.searchParams.set('token', params.accessToken);
+
+    const socket = new WebSocket(url.toString());
+    activeSocket = socket;
+
+    socket.addEventListener('open', () => params.onStatus?.(`Backend WSS connected (${base})`));
+    socket.addEventListener('close', () => {
+      if (closedByCaller) return;
+      index += 1;
+      params.onStatus?.('Backend WSS reconnecting');
+      connect();
+    });
+    socket.addEventListener('error', () => params.onStatus?.('Backend WSS error'));
+    socket.addEventListener('message', (message) => {
+      try {
+        params.onEvent(JSON.parse(String(message.data)) as DesktopEvent);
+      } catch {
+        params.onStatus?.('Ignored invalid backend event');
+      }
+    });
+  };
+
+  connect();
+
+  return () => {
+    closedByCaller = true;
+    activeSocket?.close();
+  };
 }

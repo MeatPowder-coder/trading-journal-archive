@@ -67,6 +67,24 @@ La app desktop vive en `apps/desktop` y usa:
 - Shell nativo: Rust + Tauri 2
 - Auth: pairing con backend (`/api/desktop/auth/*`)
 
+### Desktop + API local (recomendado para desarrollo)
+
+Para que la app desktop tenga chat, órdenes, eventos WSS y demás rutas `/v1/*`, corre también `apps/api` en tu máquina:
+
+```bash
+pnpm dev:api
+pnpm dev:trading
+```
+
+Opcionalmente puedes forzar endpoints de API/WSS en `apps/desktop/.env`:
+
+```bash
+VITE_API_URL=http://127.0.0.1:4000
+VITE_WS_URL=ws://127.0.0.1:4000
+```
+
+Si no defines esas variables, el cliente desktop ahora intenta fallback automático a `http://127.0.0.1:4000` / `ws://127.0.0.1:4000` en modo desarrollo.
+
 ### Comandos rápidos
 
 Desde la raíz del repo:
