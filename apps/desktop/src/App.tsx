@@ -13,6 +13,7 @@ import { LiquidationPanel } from './components/LiquidationPanel';
 import { OrderPanel } from './components/OrderPanel';
 import { RiskHeader } from './components/RiskHeader';
 import { TradingViewChartWorkspace } from './components/TradingViewChartWorkspace';
+import { WatchlistPanel } from './components/WatchlistPanel';
 import { WebMirrorFrame } from './components/WebMirrorFrame';
 import { useBackendEvents } from './hooks/useBackendEvents';
 import { useMarketData } from './hooks/useMarketData';
@@ -198,8 +199,11 @@ export default function App() {
   const [timeframe, setTimeframe] = useState<Timeframe>('1m');
   const [showMicroPanels, setShowMicroPanels] = useState(true);
   const [showRightRail, setShowRightRail] = useState(true);
+  const [showWatchlist, setShowWatchlist] = useState(true);
   const [focusChartMode, setFocusChartMode] = useState(false);
   const [useWebMirrorTabs, setUseWebMirrorTabs] = useState(false);
+  const [microPanelView, setMicroPanelView] = useState<'all' | 'cvd' | 'footprint' | 'liquidations'>('all');
+  const [watchlistWidth, setWatchlistWidth] = useState(220);
   const [rightRailWidth, setRightRailWidth] = useState(360);
   const [lowerPanelsHeight, setLowerPanelsHeight] = useState(250);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
@@ -746,12 +750,35 @@ export default function App() {
   }, [lowerPanelsHeight]);
 
   const restoreDeskLayout = useCallback(() => {
+    setShowWatchlist(true);
     setShowRightRail(true);
     setShowMicroPanels(true);
     setFocusChartMode(false);
+    setMicroPanelView('all');
+    setWatchlistWidth(220);
     setRightRailWidth(360);
     setLowerPanelsHeight(250);
   }, []);
+
+  const startWatchlistResize = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = watchlistWidth;
+
+    const onMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const next = Math.max(180, Math.min(360, startWidth + delta));
+      setWatchlistWidth(next);
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [watchlistWidth]);
 
   return (
     <div className="terminal-shell">
@@ -765,12 +792,6 @@ export default function App() {
             <option value="futures">Futures</option>
             <option value="spot">Spot</option>
           </select>
-          <input
-            value={symbolFilter}
-            onChange={(event) => setSymbolFilter(event.target.value)}
-            placeholder="Search pair..."
-            className="symbol-filter"
-          />
           <select value={symbol} onChange={(event) => setSymbol(event.target.value)} className="symbol-select">
             {symbolOptions.map((option) => <option key={option} value={option}>{option}</option>)}
           </select>
@@ -819,18 +840,22 @@ export default function App() {
         </main>
       ) : (
         <main className="trading-grid">
-          <RiskHeader cockpit={cockpit} marketStatus={market.status} backendStatus={backendWsStatus} />
+          {!(activeTab === 'trading-desk' && focusChartMode) ? (
+            <>
+              <RiskHeader cockpit={cockpit} marketStatus={market.status} backendStatus={backendWsStatus} />
 
-          <section className="session-strip">
-            <span>{session?.user.name || session?.user.email || 'Desktop session'}</span>
-            <span>{marketType === 'futures' ? 'BINANCE FUTURES' : 'BINANCE SPOT'}</span>
-            <b>{side}</b>
-            <span>Entry {formatNumber(entry, 4)}</span>
-            <span>Mark {formatNumber(latestPrice, 4)}</span>
-            <span className={Number(unrealizedHint) >= 0 ? 'positive' : 'negative'}>
-              PnL hint {formatNumber(unrealizedHint, 2)}%
-            </span>
-          </section>
+              <section className="session-strip">
+                <span>{session?.user.name || session?.user.email || 'Desktop session'}</span>
+                <span>{marketType === 'futures' ? 'BINANCE FUTURES' : 'BINANCE SPOT'}</span>
+                <b>{side}</b>
+                <span>Entry {formatNumber(entry, 4)}</span>
+                <span>Mark {formatNumber(latestPrice, 4)}</span>
+                <span className={Number(unrealizedHint) >= 0 ? 'positive' : 'negative'}>
+                  PnL hint {formatNumber(unrealizedHint, 2)}%
+                </span>
+              </section>
+            </>
+          ) : null}
 
           <nav className="workspace-tabs">
             {desktopTabs.map((tab) => (
@@ -846,11 +871,35 @@ export default function App() {
 
           {activeTab === 'trading-desk' ? (
             <div className="main-desk">
+              {showWatchlist && !focusChartMode ? (
+                <>
+                  <aside className="watchlist-rail" style={{ width: `${watchlistWidth}px` }}>
+                    <WatchlistPanel
+                      marketType={marketType}
+                      symbols={marketSymbols[marketType]}
+                      activeSymbol={symbol}
+                      filter={symbolFilter}
+                      onFilterChange={setSymbolFilter}
+                      onSelectSymbol={setSymbol}
+                    />
+                  </aside>
+                  <div
+                    className="splitter-vertical"
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize watchlist"
+                    onMouseDown={startWatchlistResize}
+                  />
+                </>
+              ) : null}
               <div className="chart-column">
                 <div className="chart-body">
                   <TradingViewChartWorkspace state={market.state} active={activeTab === 'trading-desk'} />
                 </div>
                 <div className="desk-toolbar">
+                  <button className="btn" onClick={() => setShowWatchlist((current) => !current)}>
+                    {showWatchlist ? 'Hide Watchlist' : 'Show Watchlist'}
+                  </button>
                   <button className="btn" onClick={() => setShowMicroPanels((current) => !current)}>
                     {showMicroPanels ? 'Hide CVD / Footprint / Liquidations' : 'Show CVD / Footprint / Liquidations'}
                   </button>
@@ -873,10 +922,18 @@ export default function App() {
                       aria-label="Resize lower panels"
                       onMouseDown={startLowerPanelsResize}
                     />
-                    <div className="lower-panels" style={{ minHeight: `${lowerPanelsHeight}px`, maxHeight: `${lowerPanelsHeight}px` }}>
-                      <CVDPanel points={market.state.cvd} />
-                      <FootprintPanel bins={market.state.footprint} />
-                      <LiquidationPanel events={market.state.liquidations} />
+                    <div className="lower-panels-wrap" style={{ minHeight: `${lowerPanelsHeight}px`, maxHeight: `${lowerPanelsHeight}px` }}>
+                      <div className="micro-tabs">
+                        <button className={microPanelView === 'all' ? 'active' : ''} onClick={() => setMicroPanelView('all')}>All</button>
+                        <button className={microPanelView === 'cvd' ? 'active' : ''} onClick={() => setMicroPanelView('cvd')}>CVD</button>
+                        <button className={microPanelView === 'footprint' ? 'active' : ''} onClick={() => setMicroPanelView('footprint')}>Footprint</button>
+                        <button className={microPanelView === 'liquidations' ? 'active' : ''} onClick={() => setMicroPanelView('liquidations')}>Liquidations</button>
+                      </div>
+                      <div className={microPanelView === 'all' ? 'lower-panels' : 'lower-panels single'}>
+                        {microPanelView === 'all' || microPanelView === 'cvd' ? <CVDPanel points={market.state.cvd} /> : null}
+                        {microPanelView === 'all' || microPanelView === 'footprint' ? <FootprintPanel bins={market.state.footprint} /> : null}
+                        {microPanelView === 'all' || microPanelView === 'liquidations' ? <LiquidationPanel events={market.state.liquidations} /> : null}
+                      </div>
                     </div>
                   </>
                 ) : null}

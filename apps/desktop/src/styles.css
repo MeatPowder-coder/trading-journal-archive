@@ -250,7 +250,7 @@ label {
   display: flex;
   align-items: stretch;
   gap: 12px;
-  min-height: calc(100vh - 280px);
+  min-height: calc(100vh - 230px);
 }
 
 .chart-column {
@@ -262,7 +262,7 @@ label {
 }
 
 .chart-body {
-  min-height: 420px;
+  min-height: 520px;
   display: flex;
   flex-direction: column;
 }
@@ -294,11 +294,11 @@ label {
   border-color: #1e90ff;
 }
 
-.chart-shell { min-height: calc(100vh - 470px); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.chart-shell { min-height: calc(100vh - 390px); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 
 .tradingview-container {
   min-height: 500px;
-  height: calc(100vh - 520px);
+  height: calc(100vh - 460px);
   border: 1px solid #13263a;
   border-radius: 14px;
   overflow: hidden;
@@ -347,9 +347,41 @@ label {
   overflow: hidden;
 }
 
+.lower-panels.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lower-panels-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.micro-tabs {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.micro-tabs button {
+  border: 1px solid var(--line-strong);
+  background: #0a1d31;
+  color: #d9ebff;
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.micro-tabs button.active {
+  border-color: #3bb8ff;
+  background: #0d3453;
+  color: #fff;
+}
+
 .desk-toolbar {
   display: flex;
   justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .desk-card,
@@ -406,6 +438,61 @@ label {
   gap: 12px;
   min-width: 0;
   max-width: min(60vw, 620px);
+}
+
+.watchlist-rail {
+  min-width: 0;
+  max-width: min(30vw, 380px);
+}
+
+.watchlist-card {
+  height: 100%;
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+}
+
+.watchlist-search {
+  margin-top: 10px;
+}
+
+.watchlist-scroll {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow: auto;
+  max-height: calc(100vh - 390px);
+  padding-right: 4px;
+}
+
+.watchlist-item {
+  border: 1px solid rgba(46, 74, 104, 0.62);
+  background: rgba(6, 20, 34, 0.9);
+  color: #d9ebff;
+  border-radius: 10px;
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.watchlist-item strong {
+  letter-spacing: 0.01em;
+}
+
+.watchlist-item small {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+}
+
+.watchlist-item.active {
+  border-color: #32b5ff;
+  background: linear-gradient(180deg, #0f2f4e, #0b2238);
+  color: #fff;
 }
 .side-card { background: linear-gradient(180deg, rgba(9, 18, 31, 0.97), rgba(5, 10, 17, 0.94)); }
 
@@ -895,6 +982,9 @@ label {
   .main-desk { flex-direction: column; }
   .splitter-vertical,
   .splitter-horizontal { display: none; }
+  .watchlist-rail { width: 100% !important; max-width: none; }
+  .watchlist-card { min-height: 260px; }
+  .watchlist-scroll { max-height: 220px; }
   .right-rail { width: 100% !important; max-width: none; }
   .right-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); display: grid; }
   .tradingview-container { height: 560px; min-height: 560px; }
