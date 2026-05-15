@@ -12,12 +12,11 @@ import {
   UserRound,
   WalletCards,
 } from 'lucide-react';
-import { buildDashboardSnapshotFromDesktop } from '@trading-journal/journal-data';
-import { JournalDashboardParity } from '@trading-journal/journal-ui';
+import { buildDashboardSnapshotFromDesktop, buildPerformanceSnapshotFromDesktopTrades } from '@trading-journal/journal-data';
+import { JournalDashboardParity, JournalPerformanceParity } from '@trading-journal/journal-ui';
 import { AIAnalysisPanel } from './components/AIAnalysisPanel';
 import { ChatDesk } from './components/ChatDesk';
 import { CVDPanel } from './components/CVDPanel';
-import { DesktopDashboardNative } from './components/DesktopDashboardNative';
 import { FootprintPanel } from './components/FootprintPanel';
 import { JournalSidebar } from './components/JournalSidebar';
 import { LiquidationPanel } from './components/LiquidationPanel';
@@ -240,6 +239,10 @@ export default function App() {
   const openTradesView = useMemo(() => cockpit?.openTrades || [], [cockpit?.openTrades]);
   const pendingOrdersView = useMemo(() => cockpit?.pendingOrders || [], [cockpit?.pendingOrders]);
   const dashboardSnapshot = useMemo(() => buildDashboardSnapshotFromDesktop(cockpit || null), [cockpit]);
+  const performanceSnapshot = useMemo(
+    () => buildPerformanceSnapshotFromDesktopTrades(desktopTrades),
+    [desktopTrades]
+  );
   const activeTrade = openTradesView[0] || null;
   const symbolOptions = useMemo(() => {
     const list = marketSymbols[marketType];
@@ -795,7 +798,7 @@ export default function App() {
     () => desktopTabs.find((tab) => tab.id === activeTab) || desktopTabs[0],
     [activeTab]
   );
-  const showTradingControls = activeTab === 'trading-desk' || activeTab === 'live-market';
+  const showTradingControls = activeTab === 'trading-desk';
 
   return (
     <div className="terminal-shell">
@@ -1031,30 +1034,27 @@ export default function App() {
 
           {activeTab === 'dashboard' && !useWebMirrorTabs ? (
             <section className="parity-panel">
-              <DesktopDashboardNative trades={desktopTrades} />
+              <JournalPerformanceParity snapshot={performanceSnapshot} heroTitle="Dashboard" />
               <JournalDashboardParity snapshot={dashboardSnapshot} title="Desktop Journal Snapshot" />
             </section>
           ) : null}
 
           {activeTab === 'live-market' ? (
-            <section className="live-market-layout">
-              <div className="chart-column">
-                <TradingViewChartWorkspace state={market.state} active={activeTab === 'live-market'} />
-                {showMicroPanels ? (
-                  <div className="lower-panels">
-                    <CVDPanel points={market.state.cvd} />
-                    <FootprintPanel bins={market.state.footprint} />
-                    <LiquidationPanel events={market.state.liquidations} />
-                  </div>
-                ) : null}
-              </div>
-              <article className="side-card">
+            <section className="parity-panel">
+              <JournalPerformanceParity
+                snapshot={performanceSnapshot}
+                title="Live Market Activity"
+                heroTitle="Live Market Activity"
+                heroSubtitle="Review execution outcomes and market behavior in one feed."
+                ctaLabel="Nueva Operación"
+              />
+              <article className="parity-card">
                 <div className="card-title-row">
                   <h3>Backend Events</h3>
                   <span className="tag">WSS</span>
                 </div>
                 <div className="event-list">
-                  {backendEvents.slice(-24).reverse().map((event, index) => (
+                  {backendEvents.slice(-36).reverse().map((event, index) => (
                     <article key={`${event.timestamp}-${index}`}>
                       <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
                       <b>{event.type}</b>
