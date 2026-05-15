@@ -22,27 +22,35 @@ export function JournalPerformanceParity({
   heroTitle = 'Dashboard',
   heroSubtitle = 'Monitor your active positions and performance.',
   ctaLabel = 'Nueva Operación',
+  showHero = true,
+  showTitleRow = true,
 }: {
   snapshot: JournalPerformanceSnapshot;
   title?: string;
   heroTitle?: string;
   heroSubtitle?: string;
   ctaLabel?: string;
+  showHero?: boolean;
+  showTitleRow?: boolean;
 }) {
   return (
     <section className="desktop-native-dashboard parity-neon-board">
-      <div className="parity-hero">
-        <div>
-          <h1>{heroTitle}</h1>
-          <p>{heroSubtitle}</p>
+      {showHero ? (
+        <div className="parity-hero">
+          <div>
+            <h1>{heroTitle}</h1>
+            <p>{heroSubtitle}</p>
+          </div>
+          <button className="parity-hero-cta" type="button">{ctaLabel}</button>
         </div>
-        <button className="parity-hero-cta" type="button">{ctaLabel}</button>
-      </div>
+      ) : null}
 
-      <header className="desktop-native-head">
-        <h2>{title}</h2>
-        <span>{snapshot.closedTradesCount} trades cerrados analizados</span>
-      </header>
+      {showTitleRow ? (
+        <header className="desktop-native-head">
+          <h2>{title}</h2>
+          <span>{snapshot.closedTradesCount} trades cerrados analizados</span>
+        </header>
+      ) : null}
 
       <div className="desktop-metrics-grid parity-metrics-grid">
         <article>

@@ -913,7 +913,7 @@ export default function App() {
             </header>
 
             <div className="trading-grid">
-              {!(activeTab === 'trading-desk' && focusChartMode) ? (
+              {activeTab === 'trading-desk' && !focusChartMode ? (
                 <>
                   <RiskHeader cockpit={cockpit} marketStatus={market.status} backendStatus={backendWsStatus} />
 
@@ -1034,7 +1034,7 @@ export default function App() {
 
           {activeTab === 'dashboard' && !useWebMirrorTabs ? (
             <section className="parity-panel">
-              <JournalPerformanceParity snapshot={performanceSnapshot} heroTitle="Dashboard" />
+              <JournalPerformanceParity snapshot={performanceSnapshot} heroTitle="Dashboard" showHero={false} showTitleRow={false} />
               <JournalDashboardParity snapshot={dashboardSnapshot} title="Desktop Journal Snapshot" />
             </section>
           ) : null}
@@ -1047,6 +1047,8 @@ export default function App() {
                 heroTitle="Live Market Activity"
                 heroSubtitle="Review execution outcomes and market behavior in one feed."
                 ctaLabel="Nueva Operación"
+                showHero={false}
+                showTitleRow={false}
               />
               <article className="parity-card">
                 <div className="card-title-row">
