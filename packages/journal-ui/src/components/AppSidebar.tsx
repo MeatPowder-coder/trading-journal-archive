@@ -1,8 +1,6 @@
 
-"use client";
 
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,9 +48,10 @@ const webIconMap: Record<JournalIconKey, ComponentType<{ className?: string }>> 
 
 // Helper for content (reused)
 const SidebarContent = ({ collapsed = false }: { collapsed?: boolean }) => {
-    const pathname = usePathname();
+    const location = useLocation();
+    const pathname = location.pathname;
     const searchParams = useSearchParams();
-    const currentTab = searchParams.get("tab");
+    const currentTab = searchParams[0].get("tab");
     const routes = JOURNAL_WEB_SIDEBAR_ROUTES.map((route) => ({
         ...route,
         iconComponent: webIconMap[route.icon] || LayoutDashboard,
@@ -62,7 +61,7 @@ const SidebarContent = ({ collapsed = false }: { collapsed?: boolean }) => {
     return (
         <div className={cn("space-y-4 pt-14 pb-4 flex flex-col h-full bg-zinc-900 text-white transition-all duration-300 overflow-x-hidden", collapsed ? "items-center" : "")}>
             <div className="px-3 py-2 flex-1 w-full">
-                <Link href="/" className={cn("flex items-center mb-14 pl-3 transition-all", collapsed ? "justify-center pl-0" : "")}>
+                <Link to="/" className={cn("flex items-center mb-14 pl-3 transition-all", collapsed ? "justify-center pl-0" : "")}>
                     <div className="relative h-8 w-8 bg-white text-black p-1.5 rounded-lg flex items-center justify-center shrink-0">
                         <Zap className="h-5 w-5 fill-current" />
                     </div>
@@ -76,7 +75,7 @@ const SidebarContent = ({ collapsed = false }: { collapsed?: boolean }) => {
                     {routes.map((route) => (
                         <Link
                             key={route.href}
-                            href={route.href}
+                            to={route.href}
                             title={collapsed ? route.label : undefined}
                             className={cn(
                                 "text-sm group flex p-3 w-full font-medium cursor-pointer hover:text-white hover:bg-white/10 rounded-lg transition-all",

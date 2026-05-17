@@ -11,8 +11,16 @@ import {
   Radar,
   UserRound,
   WalletCards,
+  type LucideIcon,
 } from 'lucide-react';
-import { buildDashboardSnapshotFromDesktop, buildPerformanceSnapshotFromDesktopTrades } from '@trading-journal/journal-data';
+import {
+  buildDashboardSnapshotFromDesktop,
+  buildPerformanceSnapshotFromDesktopTrades,
+  JOURNAL_DESKTOP_TABS,
+  getDesktopTab,
+  type JournalDesktopTabId,
+  type JournalIconKey,
+} from '@trading-journal/journal-data';
 import { JournalDashboardParity, JournalPerformanceParity } from '@trading-journal/journal-ui';
 import { AIAnalysisPanel } from './components/AIAnalysisPanel';
 import { ChatDesk } from './components/ChatDesk';
@@ -179,18 +187,30 @@ const marketSymbols: Record<MarketType, string[]> = {
     'PEPEUSDT',
   ],
 };
-const desktopTabs = [
-  { id: 'trading-desk', label: 'Trading Desk', icon: CandlestickChart },
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'live-market', label: 'Live Market Activity', icon: Radar },
-  { id: 'chat', label: 'Chat', icon: MessageSquareMore },
-  { id: 'portfolio', label: 'Portfolio', icon: WalletCards },
-  { id: 'cuentas', label: 'Cuentas', icon: UserRound },
-  { id: 'transacciones', label: 'Transacciones', icon: CircleDollarSign },
-  { id: 'alertas', label: 'Alertas', icon: BellRing },
-] as const;
+const desktopIconMap: Record<JournalIconKey, LucideIcon> = {
+  'layout-dashboard': LayoutDashboard,
+  'trending-up': LayoutDashboard,
+  'pie-chart': WalletCards,
+  wallet: UserRound,
+  receipt: CircleDollarSign,
+  bell: BellRing,
+  'message-square': MessageSquareMore,
+  'folder-open': LayoutDashboard,
+  'candlestick-chart': CandlestickChart,
+  radar: Radar,
+  'user-round': UserRound,
+  'wallet-cards': WalletCards,
+  'circle-dollar-sign': CircleDollarSign,
+  'bell-ring': BellRing,
+  'message-square-more': MessageSquareMore,
+};
 
-type DesktopTabId = typeof desktopTabs[number]['id'];
+const desktopTabs = JOURNAL_DESKTOP_TABS.map((tab) => ({
+  ...tab,
+  icon: desktopIconMap[tab.icon] || LayoutDashboard,
+}));
+
+type DesktopTabId = JournalDesktopTabId;
 
 export default function App() {
   const [backendUrl, setBackendUrl] = useState(() => getSavedBackendUrl() || defaultBackendUrl());
@@ -798,6 +818,10 @@ export default function App() {
     () => desktopTabs.find((tab) => tab.id === activeTab) || desktopTabs[0],
     [activeTab]
   );
+  const activeTabDescriptor = useMemo(() => getDesktopTab(activeTab), [activeTab]);
+  const webMirrorPath = activeTabDescriptor?.webMirrorPath || '';
+  const canUseWebMirror = Boolean(webMirrorPath);
+  const showWebMirror = useWebMirrorTabs && canUseWebMirror;
   const showTradingControls = activeTab === 'trading-desk';
 
   return (
@@ -866,12 +890,12 @@ export default function App() {
             </nav>
             <div className="desktop-parity-sidebar-foot">
               <button
-                className={useWebMirrorTabs ? 'desktop-parity-link active' : 'desktop-parity-link'}
+                className={showWebMirror ? 'desktop-parity-link active' : 'desktop-parity-link'}
                 onClick={() => setUseWebMirrorTabs((value) => !value)}
-                title={useWebMirrorTabs ? 'Web Mirror (TEMP)' : 'Native Mode'}
-                aria-label={useWebMirrorTabs ? 'Web Mirror (TEMP)' : 'Native Mode'}
+                title={showWebMirror ? 'Web Mirror (TEMP)' : canUseWebMirror ? 'Native Mode' : 'Native only for this tab'}
+                aria-label={showWebMirror ? 'Web Mirror (TEMP)' : canUseWebMirror ? 'Native Mode' : 'Native only for this tab'}
               >
-                <span>{useWebMirrorTabs ? 'WEB' : 'NAT'}</span>
+                <span>{showWebMirror ? 'WEB' : 'NAT'}</span>
               </button>
               <button
                 className="desktop-parity-link desktop-logout"
@@ -1024,15 +1048,15 @@ export default function App() {
             </div>
           ) : null}
 
-          {activeTab === 'dashboard' && useWebMirrorTabs ? (
+          {showWebMirror ? (
             <WebMirrorFrame
               baseUrl={webMirrorBaseUrl}
-              path="/?tab=trading&desktopEmbed=1"
-              title="Dashboard · Web Parity"
+              path={webMirrorPath}
+              title={`${activeTabMeta.label} · Web Parity`}
             />
           ) : null}
 
-          {activeTab === 'dashboard' && !useWebMirrorTabs ? (
+          {activeTab === 'dashboard' && !showWebMirror ? (
             <section className="parity-panel">
               <JournalPerformanceParity snapshot={performanceSnapshot} heroTitle="Dashboard" showHero={false} showTitleRow={false} />
             </section>
@@ -1068,27 +1092,11 @@ export default function App() {
             </section>
           ) : null}
 
-          {activeTab === 'chat' && useWebMirrorTabs ? (
-            <WebMirrorFrame
-              baseUrl={webMirrorBaseUrl}
-              path="/chat?desktopEmbed=1"
-              title="Chat · Web Parity"
-            />
-          ) : null}
-
-          {activeTab === 'chat' && !useWebMirrorTabs ? (
+          {activeTab === 'chat' && !showWebMirror ? (
             <ChatDesk backendUrl={backendUrl} tokens={tokens} activeTradeId={activeTradeId} />
           ) : null}
 
-          {activeTab === 'portfolio' && useWebMirrorTabs ? (
-            <WebMirrorFrame
-              baseUrl={webMirrorBaseUrl}
-              path="/?tab=portfolio&desktopEmbed=1"
-              title="Portfolio · Web Parity"
-            />
-          ) : null}
-
-          {activeTab === 'portfolio' && !useWebMirrorTabs ? (
+          {activeTab === 'portfolio' && !showWebMirror ? (
             <section className="parity-panel">
               <JournalDashboardParity snapshot={dashboardSnapshot} title="Portfolio Overview" />
               <article className="parity-card">
@@ -1110,15 +1118,7 @@ export default function App() {
             </section>
           ) : null}
 
-          {activeTab === 'cuentas' && useWebMirrorTabs ? (
-            <WebMirrorFrame
-              baseUrl={webMirrorBaseUrl}
-              path="/?tab=cuentas&desktopEmbed=1"
-              title="Cuentas · Web Parity"
-            />
-          ) : null}
-
-          {activeTab === 'cuentas' && !useWebMirrorTabs ? (
+          {activeTab === 'cuentas' && !showWebMirror ? (
             <section className="parity-panel">
               <div className="parity-grid metrics">
                 <article>
@@ -1148,15 +1148,7 @@ export default function App() {
             </section>
           ) : null}
 
-          {activeTab === 'transacciones' && useWebMirrorTabs ? (
-            <WebMirrorFrame
-              baseUrl={webMirrorBaseUrl}
-              path="/?tab=transacciones&desktopEmbed=1"
-              title="Transacciones · Web Parity"
-            />
-          ) : null}
-
-          {activeTab === 'transacciones' && !useWebMirrorTabs ? (
+          {activeTab === 'transacciones' && !showWebMirror ? (
             <section className="parity-panel">
               <article className="parity-card">
                 <h3>Pending Orders ({pendingOrdersView.length})</h3>
@@ -1190,15 +1182,7 @@ export default function App() {
             </section>
           ) : null}
 
-          {activeTab === 'alertas' && useWebMirrorTabs ? (
-            <WebMirrorFrame
-              baseUrl={webMirrorBaseUrl}
-              path="/?tab=alertas&desktopEmbed=1"
-              title="Alertas · Web Parity"
-            />
-          ) : null}
-
-          {activeTab === 'alertas' && !useWebMirrorTabs ? (
+          {activeTab === 'alertas' && !showWebMirror ? (
             <section className="parity-panel">
               <div className="parity-grid two-cols">
                 <article className="parity-card">
