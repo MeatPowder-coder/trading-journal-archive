@@ -1,5 +1,5 @@
 
-import { useSubscription, gql } from "@apollo/client";
+import { useQuery, useSubscription, gql } from "@apollo/client";
 import {
   Table,
   TableBody,
@@ -33,8 +33,33 @@ const TRANSACTIONS_SUBSCRIPTION = gql`
   }
 `;
 
+const TRANSACTIONS_QUERY = gql`
+  query GetTransactionsQuery {
+    transacciones(order_by: {fecha_transaccion: desc}, limit: 50) {
+      id
+      fecha_transaccion
+      descripcion
+      categoria
+      monto
+      tipo
+      moneda
+      cuenta_id
+    }
+  }
+`;
+
 const ACCOUNTS_SUBSCRIPTION = gql`
   subscription GetAccounts {
+    cuentas {
+      id
+      nombre
+      tipo
+    }
+  }
+`;
+
+const ACCOUNTS_QUERY = gql`
+  query GetAccountsQuery {
     cuentas {
       id
       nombre
@@ -71,14 +96,25 @@ interface Account {
 
 export function TransactionList() {
   const { data: transData, loading: transLoading, error: transError } = useSubscription(TRANSACTIONS_SUBSCRIPTION);
+  const { data: transQueryData, loading: transQueryLoading, error: transQueryError } = useQuery(TRANSACTIONS_QUERY, {
+    pollInterval: 15000,
+    fetchPolicy: "network-only",
+  });
   const { data: accData, loading: accLoading, error: accError } = useSubscription(ACCOUNTS_SUBSCRIPTION);
+  const { data: accQueryData, loading: accQueryLoading, error: accQueryError } = useQuery(ACCOUNTS_QUERY, {
+    pollInterval: 15000,
+    fetchPolicy: "network-only",
+  });
   
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
 
-  const error = transError || accError;
-  const loading = transLoading || accLoading;
+  const transactions = transData?.transacciones || transQueryData?.transacciones || [];
+  const accounts: Account[] = accData?.cuentas || accQueryData?.cuentas || [];
+  const loading = (transLoading && transQueryLoading) || (accLoading && accQueryLoading);
+  const hasAnyData = transactions.length > 0 || accounts.length > 0;
+  const error = hasAnyData ? null : transError || transQueryError || accError || accQueryError;
 
   if (error) {
     return (
@@ -90,9 +126,6 @@ export function TransactionList() {
       </Card>
     );
   }
-
-  const transactions = transData?.transacciones || [];
-  const accounts: Account[] = accData?.cuentas || [];
 
   // Create a map for quick account lookup
   const accountMap = new Map(accounts.map((acc: Account) => [acc.id, acc]));

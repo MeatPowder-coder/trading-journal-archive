@@ -44,6 +44,16 @@ const BALANCE_VIEWS_SUBSCRIPTION = gql`
   }
 `;
 
+const BALANCE_VIEWS_QUERY = gql`
+  query GetBalanceViewsQuery {
+    balance_views(order_by: {id: asc}) {
+      id
+      nombre
+      config
+    }
+  }
+`;
+
 const INSERT_BALANCE_VIEW = gql`
   mutation InsertBalanceView($nombre: String!, $config: jsonb!) {
     insert_balance_views_one(object: {nombre: $nombre, config: $config}) {
@@ -100,6 +110,10 @@ export function AccountBalance({ trades, prices, calculateRealTimePnL }: Account
   });
   
   const { data: viewData, loading: viewLoading } = useSubscription(BALANCE_VIEWS_SUBSCRIPTION);
+  const { data: viewQueryData, loading: viewQueryLoading } = useQuery(BALANCE_VIEWS_QUERY, {
+    pollInterval: 15000,
+    fetchPolicy: "network-only",
+  });
   const [insertView] = useMutation(INSERT_BALANCE_VIEW, {
       onCompleted: () => console.log("View saved successfully"),
       onError: (err) => {
@@ -139,7 +153,8 @@ export function AccountBalance({ trades, prices, calculateRealTimePnL }: Account
   }
 
   const accounts: Account[] = accData?.cuentas || [];
-  const balanceViews: BalanceView[] = viewData?.balance_views || [];
+  const balanceViews: BalanceView[] = viewData?.balance_views || viewQueryData?.balance_views || [];
+  const viewsStillLoading = (viewLoading && viewQueryLoading) && balanceViews.length === 0;
 
   // Calcular saldos ajustados con Holdings
   const adjustedAccounts = accounts.map(acc => {
@@ -237,6 +252,13 @@ export function AccountBalance({ trades, prices, calculateRealTimePnL }: Account
     <div className="space-y-6">
       {/* Súper Saldos / Vistas Personalizadas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          {viewsStillLoading ? (
+            <Card className="border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+              <CardContent className="py-6">
+                <p className="text-sm text-zinc-500">Cargando vistas...</p>
+              </CardContent>
+            </Card>
+          ) : null}
           {balanceViews.map((view) => (
               <Card key={view.id} className="border-2 border-indigo-500/20 bg-indigo-50/10 dark:bg-indigo-900/5 relative group overflow-hidden">
                   <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">

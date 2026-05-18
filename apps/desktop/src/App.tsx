@@ -1258,7 +1258,7 @@ export default function App() {
                 <PortfolioList
                   trades={desktopTrades as any[]}
                   loading={!desktopTrades.length && busy}
-                  prices={livePrices}
+                  prices={{ ...parityPrices, ...livePrices }}
                 />
                 {unresolvedPortfolioTickers.length ? (
                   <article className="parity-card">
