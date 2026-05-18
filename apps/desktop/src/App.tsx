@@ -229,6 +229,7 @@ export default function App() {
   const [cockpit, setCockpit] = useState<DesktopCockpitResponse | null>(null);
   const [desktopTrades, setDesktopTrades] = useState<Record<string, unknown>[]>([]);
   const [portfolioPrices, setPortfolioPrices] = useState<Record<string, number>>({});
+  const [unresolvedPortfolioTickers, setUnresolvedPortfolioTickers] = useState<string[]>([]);
   const [backendEvents, setBackendEvents] = useState<DesktopEvent[]>([]);
   const [activeTab, setActiveTab] = useState<DesktopTabId>('trading-desk');
   const [marketType, setMarketType] = useState<MarketType>('futures');
@@ -388,9 +389,11 @@ export default function App() {
         if (payload?.prices) {
           setPortfolioPrices((current) => ({ ...current, ...payload.prices }));
         }
+        setUnresolvedPortfolioTickers(Array.isArray(payload?.unresolved) ? payload.unresolved : []);
       })
       .catch(() => {
         // Keep existing prices; selected symbol still comes from live market stream.
+        setUnresolvedPortfolioTickers([]);
       });
 
     return () => {
@@ -1204,6 +1207,14 @@ export default function App() {
                   loading={!desktopTrades.length && busy}
                   prices={livePrices}
                 />
+                {unresolvedPortfolioTickers.length ? (
+                  <article className="parity-card">
+                    <h3>Price feed warnings</h3>
+                    <p className="muted">
+                      Unresolved tickers: {unresolvedPortfolioTickers.join(', ')}
+                    </p>
+                  </article>
+                ) : null}
                 <article className="parity-card">
                   <h3>Open Trading Positions ({openTradesView.length})</h3>
                   <div className="mini-table">

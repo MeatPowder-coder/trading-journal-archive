@@ -91,6 +91,54 @@ function authHeaders(accessToken?: string): Record<string, string> {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
 }
 
+function normalizeTicker(raw: string) {
+  return String(raw || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function looksLikeBinancePair(ticker: string) {
+  return /^(?:[A-Z0-9]{2,12})(USDT|USDC|BUSD|FDUSD)$/.test(ticker);
+}
+
+async function fetchBinancePublicPrice(symbol: string) {
+  const normalized = normalizeTicker(symbol);
+  if (!normalized) return null;
+
+  const parsePrice = async (url: string) => {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const payload = await response.json().catch(() => null as any);
+    const price = Number(payload?.price);
+    return Number.isFinite(price) ? price : null;
+  };
+
+  const futures = await parsePrice(
+    `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${encodeURIComponent(normalized)}`
+  );
+  if (futures != null) return futures;
+
+  const spot = await parsePrice(
+    `https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(normalized)}`
+  );
+  if (spot != null) return spot;
+
+  return null;
+}
+
+async function fetchYahooProxyPrice(baseUrl: string, ticker: string) {
+  const normalized = normalizeTicker(ticker);
+  if (!normalized) return null;
+  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/api/yahoo-price/${encodeURIComponent(normalized)}`);
+  if (!response.ok) return null;
+  const payload = await response.json().catch(() => null as any);
+  const closes = payload?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
+  if (!Array.isArray(closes)) return null;
+  for (let i = closes.length - 1; i >= 0; i -= 1) {
+    const price = Number(closes[i]);
+    if (Number.isFinite(price)) return price;
+  }
+  return null;
+}
+
 function shouldTryApiFallback(status: number) {
   return status === 404 || status === 405 || status === 500 || status === 501 || status === 502 || status === 503;
 }
@@ -279,13 +327,49 @@ export async function fetchDesktopPrices(params: {
 
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
 
-  return fetchApiJsonWithFallback<DesktopPricesResponse>({
-    baseUrl: params.baseUrl,
-    path: `/v1/desktop/prices${suffix}`,
-    init: {
-      headers: authHeaders(params.accessToken),
-    },
-  });
+  try {
+    return await fetchApiJsonWithFallback<DesktopPricesResponse>({
+      baseUrl: params.baseUrl,
+      path: `/v1/desktop/prices${suffix}`,
+      init: {
+        headers: authHeaders(params.accessToken),
+      },
+    });
+  } catch {
+    // Fallback for environments where the new desktop API service is not redeployed yet.
+    const prices: Record<string, number> = {};
+    const unresolved: string[] = [];
+
+    for (const ticker of compact) {
+      let price: number | null = null;
+      const normalized = normalizeTicker(ticker);
+
+      if (looksLikeBinancePair(normalized)) {
+        price = await fetchBinancePublicPrice(normalized);
+      }
+
+      if (price == null && /^[A-Z0-9]{2,12}$/.test(normalized) && !normalized.includes('=')) {
+        price = await fetchBinancePublicPrice(`${normalized}USDT`);
+      }
+
+      if (price == null) {
+        price = await fetchYahooProxyPrice(params.baseUrl, normalized);
+      }
+
+      if (price != null) {
+        prices[normalized] = price;
+      } else {
+        unresolved.push(normalized);
+      }
+    }
+
+    return {
+      success: true,
+      asOf: new Date().toISOString(),
+      prices,
+      unresolved,
+    };
+  }
 }
 
 export async function createSLTPMove(params: {
