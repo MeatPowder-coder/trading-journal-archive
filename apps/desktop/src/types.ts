@@ -107,6 +107,13 @@ export interface DesktopTradesResponse {
   trades: DesktopTradeRow[];
 }
 
+export interface DesktopPricesResponse {
+  success: boolean;
+  asOf: string;
+  prices: Record<string, number>;
+  unresolved: string[];
+}
+
 export type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d';
 export type MarketType = 'futures' | 'spot';
 

@@ -49,6 +49,7 @@ import {
   fetchDesktopTrades,
   fetchDesktopBootstrap,
   fetchDesktopCockpit,
+  fetchDesktopPrices,
   fetchDesktopSession,
   placeLimitOrder,
   placeMarketOrder,
@@ -227,6 +228,7 @@ export default function App() {
   const [session, setSession] = useState<DesktopSessionResponse | null>(null);
   const [cockpit, setCockpit] = useState<DesktopCockpitResponse | null>(null);
   const [desktopTrades, setDesktopTrades] = useState<Record<string, unknown>[]>([]);
+  const [portfolioPrices, setPortfolioPrices] = useState<Record<string, number>>({});
   const [backendEvents, setBackendEvents] = useState<DesktopEvent[]>([]);
   const [activeTab, setActiveTab] = useState<DesktopTabId>('trading-desk');
   const [marketType, setMarketType] = useState<MarketType>('futures');
@@ -281,8 +283,25 @@ export default function App() {
     [desktopTrades]
   );
   const activeTrade = openTradesView[0] || null;
+  const portfolioTickers = useMemo(() => {
+    const tickers = desktopTrades
+      .map((trade) => {
+        const strategy = readString(trade, 'tipo_estrategia', '').trim().toUpperCase();
+        const status = readString(trade, 'estado', '').trim().toUpperCase();
+        const isHolding = strategy === 'HOLDING';
+        const isOpen = status === 'OPEN' || status === 'ABIERTO';
+        if (!isHolding && !isOpen) return '';
+
+        const tickerApi = readString(trade, 'ticker_api', '').trim().toUpperCase();
+        if (tickerApi) return tickerApi.replace(/\//g, '');
+        return readString(trade, 'simbolo', '').trim().toUpperCase().replace(/\//g, '');
+      })
+      .filter(Boolean);
+
+    return Array.from(new Set(tickers)).slice(0, 120);
+  }, [desktopTrades]);
   const livePrices = useMemo(() => {
-    const prices: Record<string, number> = {};
+    const prices: Record<string, number> = { ...portfolioPrices };
     if (market.summary.latestPrice) {
       const normalized = symbol.trim().toUpperCase();
       prices[normalized] = market.summary.latestPrice;
@@ -291,7 +310,7 @@ export default function App() {
       }
     }
     return prices;
-  }, [market.summary.latestPrice, symbol]);
+  }, [market.summary.latestPrice, portfolioPrices, symbol]);
   const symbolOptions = useMemo(() => {
     const list = marketSymbols[marketType];
     const filter = symbolFilter.trim().toUpperCase();
@@ -350,6 +369,34 @@ export default function App() {
     },
     [backendUrl]
   );
+
+  useEffect(() => {
+    if (!tokens?.accessToken) {
+      setPortfolioPrices({});
+      return;
+    }
+    if (!portfolioTickers.length) return;
+
+    let cancelled = false;
+    fetchDesktopPrices({
+      baseUrl: backendUrl,
+      accessToken: tokens.accessToken,
+      tickers: portfolioTickers,
+    })
+      .then((payload) => {
+        if (cancelled) return;
+        if (payload?.prices) {
+          setPortfolioPrices((current) => ({ ...current, ...payload.prices }));
+        }
+      })
+      .catch(() => {
+        // Keep existing prices; selected symbol still comes from live market stream.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [backendUrl, portfolioTickers, tokens?.accessToken]);
 
   const rotateTokens = useCallback(
     async (refreshToken: string) => {

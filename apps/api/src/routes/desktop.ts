@@ -81,6 +81,90 @@ async function getTradingBlockInfo(now = new Date()) {
   };
 }
 
+function normalizeTicker(raw: unknown) {
+  if (typeof raw !== 'string') return '';
+  return raw.trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function isBinanceStyleSymbol(ticker: string) {
+  return /^(?:[A-Z0-9]{2,12})(USDT|USDC|BUSD|FDUSD)$/.test(ticker);
+}
+
+function isLikelyCryptoBase(ticker: string) {
+  return /^[A-Z0-9]{2,12}$/.test(ticker) && !ticker.includes('=');
+}
+
+async function fetchBinancePublicPrice(symbol: string) {
+  const normalized = normalizeTicker(symbol);
+  if (!normalized) return null;
+
+  const tryParsePrice = async (url: string) => {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const payload = await response.json().catch(() => null as any);
+    const price = Number(payload?.price);
+    return Number.isFinite(price) ? price : null;
+  };
+
+  const futures = await tryParsePrice(
+    `https://fapi.binance.com/fapi/v1/ticker/price?symbol=${encodeURIComponent(normalized)}`
+  );
+  if (futures != null) return futures;
+
+  const spot = await tryParsePrice(
+    `https://api.binance.com/api/v3/ticker/price?symbol=${encodeURIComponent(normalized)}`
+  );
+  if (spot != null) return spot;
+
+  return null;
+}
+
+async function fetchYahooPrice(ticker: string) {
+  const normalized = normalizeTicker(ticker);
+  if (!normalized) return null;
+
+  const response = await fetch(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(normalized)}?interval=1m&range=1d`
+  );
+  if (!response.ok) return null;
+
+  const payload = await response.json().catch(() => null as any);
+  const result = payload?.chart?.result?.[0];
+  const closes = Array.isArray(result?.indicators?.quote?.[0]?.close)
+    ? result.indicators.quote[0].close
+    : [];
+  for (let i = closes.length - 1; i >= 0; i -= 1) {
+    const price = Number(closes[i]);
+    if (Number.isFinite(price)) return price;
+  }
+  return null;
+}
+
+async function resolveTickerPrice(ticker: string) {
+  const normalized = normalizeTicker(ticker);
+  if (!normalized) return null;
+
+  if (isBinanceStyleSymbol(normalized)) {
+    const direct = await fetchBinancePublicPrice(normalized);
+    if (direct != null) return direct;
+  }
+
+  // Try Yahoo directly first for equities and custom tickers (e.g. VOO, AAPL, USDCOP=X).
+  const yahooDirect = await fetchYahooPrice(normalized);
+  if (yahooDirect != null) return yahooDirect;
+
+  // If ticker looks like a crypto base (e.g. ETH), try Binance pair + Yahoo "-USD".
+  if (isLikelyCryptoBase(normalized)) {
+    const binanceUsdt = await fetchBinancePublicPrice(`${normalized}USDT`);
+    if (binanceUsdt != null) return binanceUsdt;
+
+    const yahooUsd = await fetchYahooPrice(`${normalized}-USD`);
+    if (yahooUsd != null) return yahooUsd;
+  }
+
+  return null;
+}
+
 export async function registerDesktopRoutes(instance: FastifyInstance) {
   instance.get('/health', async () => ({
     ok: true,
@@ -213,6 +297,57 @@ export async function registerDesktopRoutes(instance: FastifyInstance) {
       asOf: new Date().toISOString(),
       total: trades.rows.length,
       trades: trades.rows.map((row: any) => row.trade || {}),
+    };
+  });
+
+  instance.get('/v1/desktop/prices', async (request, reply) => {
+    const auth = await resolveDesktopAuth(request);
+    if (!auth) return reply.code(401).send({ error: 'Desktop access token required' });
+
+    const parsed = new URL(request.url, 'http://localhost');
+    const rawTickers = parsed.searchParams.get('tickers') || '';
+    const tickers = Array.from(
+      new Set(
+        rawTickers
+          .split(',')
+          .map((value) => normalizeTicker(value))
+          .filter(Boolean)
+      )
+    ).slice(0, 120);
+
+    if (!tickers.length) {
+      return {
+        success: true,
+        asOf: new Date().toISOString(),
+        prices: {},
+        unresolved: [],
+      };
+    }
+
+    const settled = await Promise.allSettled(
+      tickers.map(async (ticker) => ({
+        ticker,
+        price: await resolveTickerPrice(ticker),
+      }))
+    );
+
+    const prices: Record<string, number> = {};
+    const unresolved: string[] = [];
+
+    settled.forEach((result, index) => {
+      const ticker = tickers[index];
+      if (result.status === 'fulfilled' && typeof result.value.price === 'number' && Number.isFinite(result.value.price)) {
+        prices[ticker] = result.value.price;
+      } else {
+        unresolved.push(ticker);
+      }
+    });
+
+    return {
+      success: true,
+      asOf: new Date().toISOString(),
+      prices,
+      unresolved,
     };
   });
 

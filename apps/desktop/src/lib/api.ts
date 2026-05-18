@@ -6,6 +6,7 @@ import type {
   DesktopBootstrapResponse,
   DesktopCockpitResponse,
   DesktopEvent,
+  DesktopPricesResponse,
   DesktopSessionResponse,
   DesktopTradesResponse,
   PairingPollResponse,
@@ -256,6 +257,35 @@ export async function fetchDesktopTrades(params: {
     });
     return parseJsonOrThrow<DesktopTradesResponse>(legacy);
   }
+}
+
+export async function fetchDesktopPrices(params: {
+  baseUrl: string;
+  accessToken: string;
+  tickers: string[];
+}) {
+  const compact = Array.from(
+    new Set(
+      params.tickers
+        .map((ticker) => String(ticker || '').trim().toUpperCase())
+        .filter(Boolean)
+    )
+  ).slice(0, 120);
+
+  const qs = new URLSearchParams();
+  if (compact.length) {
+    qs.set('tickers', compact.join(','));
+  }
+
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+
+  return fetchApiJsonWithFallback<DesktopPricesResponse>({
+    baseUrl: params.baseUrl,
+    path: `/v1/desktop/prices${suffix}`,
+    init: {
+      headers: authHeaders(params.accessToken),
+    },
+  });
 }
 
 export async function createSLTPMove(params: {
