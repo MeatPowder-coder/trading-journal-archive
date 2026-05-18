@@ -25,6 +25,7 @@ import {
   CalendarPnL,
   JournalDashboardParity,
   JournalPerformanceParity,
+  PortfolioList,
   TradingStats,
 } from '@trading-journal/journal-ui';
 import { AIAnalysisPanel } from './components/AIAnalysisPanel';
@@ -280,6 +281,17 @@ export default function App() {
     [desktopTrades]
   );
   const activeTrade = openTradesView[0] || null;
+  const livePrices = useMemo(() => {
+    const prices: Record<string, number> = {};
+    if (market.summary.latestPrice) {
+      const normalized = symbol.trim().toUpperCase();
+      prices[normalized] = market.summary.latestPrice;
+      if (normalized.endsWith('USDT')) {
+        prices[normalized.replace(/USDT$/, '')] = market.summary.latestPrice;
+      }
+    }
+    return prices;
+  }, [market.summary.latestPrice, symbol]);
   const symbolOptions = useMemo(() => {
     const list = marketSymbols[marketType];
     const filter = symbolFilter.trim().toUpperCase();
@@ -1135,23 +1147,33 @@ export default function App() {
 
           {activeTab === 'portfolio' && !showWebMirror ? (
             <section className="parity-panel">
-              <JournalDashboardParity snapshot={dashboardSnapshot} title="Portfolio Overview" />
-              <article className="parity-card">
-                <h3>Open Positions ({openTradesView.length})</h3>
-                <div className="mini-table">
-                  <div><b>ID</b><b>Symbol</b><b>Side</b><b>Entry</b><b>Status</b></div>
-                  {openTradesView.slice(0, 20).map((row, idx) => (
-                    <div key={`portfolio-open-${idx}`}>
-                      <span>#{readString(row, 'id', '-')}</span>
-                      <span>{readString(row, 'simbolo', '-')}</span>
-                      <span>{readString(row, 'direccion', '-')}</span>
-                      <span>{formatNumber(readNumber(row, 'precio_entrada'), 4)}</span>
-                      <span>{readString(row, 'estado', '-')}</span>
-                    </div>
-                  ))}
-                  {!openTradesView.length ? <p className="muted">No open positions.</p> : null}
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Portfolio</h2>
+                  <p className="text-zinc-500 dark:text-zinc-400">Long-term allocations and holding performance.</p>
                 </div>
-              </article>
+                <PortfolioList
+                  trades={desktopTrades as any[]}
+                  loading={!desktopTrades.length && busy}
+                  prices={livePrices}
+                />
+                <article className="parity-card">
+                  <h3>Open Trading Positions ({openTradesView.length})</h3>
+                  <div className="mini-table">
+                    <div><b>ID</b><b>Symbol</b><b>Side</b><b>Entry</b><b>Status</b></div>
+                    {openTradesView.slice(0, 20).map((row, idx) => (
+                      <div key={`portfolio-open-${idx}`}>
+                        <span>#{readString(row, 'id', '-')}</span>
+                        <span>{readString(row, 'simbolo', '-')}</span>
+                        <span>{readString(row, 'direccion', '-')}</span>
+                        <span>{formatNumber(readNumber(row, 'precio_entrada'), 4)}</span>
+                        <span>{readString(row, 'estado', '-')}</span>
+                      </div>
+                    ))}
+                    {!openTradesView.length ? <p className="muted">No open positions.</p> : null}
+                  </div>
+                </article>
+              </div>
             </section>
           ) : null}
 
