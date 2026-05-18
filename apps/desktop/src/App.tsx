@@ -574,6 +574,18 @@ export default function App() {
     return () => clearTimeout(id);
   }, [activeTab, timeframe, symbol, marketType]);
 
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    html.classList.add('dark', 'theme-neon');
+    body.classList.add('dark', 'theme-neon');
+
+    return () => {
+      html.classList.remove('theme-neon');
+      body.classList.remove('theme-neon');
+    };
+  }, []);
+
   async function handleRefreshCockpit() {
     if (!tokens?.accessToken) return;
     setBusy(true);
