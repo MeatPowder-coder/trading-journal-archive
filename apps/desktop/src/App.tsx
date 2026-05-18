@@ -21,7 +21,12 @@ import {
   type JournalDesktopTabId,
   type JournalIconKey,
 } from '@trading-journal/journal-data';
-import { JournalDashboardParity, JournalPerformanceParity } from '@trading-journal/journal-ui';
+import {
+  CalendarPnL,
+  JournalDashboardParity,
+  JournalPerformanceParity,
+  TradingStats,
+} from '@trading-journal/journal-ui';
 import { AIAnalysisPanel } from './components/AIAnalysisPanel';
 import { ChatDesk } from './components/ChatDesk';
 import { CVDPanel } from './components/CVDPanel';
@@ -258,6 +263,17 @@ export default function App() {
 
   const openTradesView = useMemo(() => cockpit?.openTrades || [], [cockpit?.openTrades]);
   const pendingOrdersView = useMemo(() => cockpit?.pendingOrders || [], [cockpit?.pendingOrders]);
+  const dashboardWebTrades = useMemo(
+    () =>
+      desktopTrades.filter((trade) => {
+        const raw = trade?.tipo_estrategia;
+        if (raw === null || raw === undefined) return true;
+        const strategy = String(raw).trim();
+        if (!strategy || strategy.toLowerCase() === 'null') return true;
+        return strategy.toUpperCase() === 'TRADING';
+      }),
+    [desktopTrades]
+  );
   const dashboardSnapshot = useMemo(() => buildDashboardSnapshotFromDesktop(cockpit || null), [cockpit]);
   const performanceSnapshot = useMemo(
     () => buildPerformanceSnapshotFromDesktopTrades(desktopTrades),
@@ -1070,7 +1086,16 @@ export default function App() {
 
           {activeTab === 'dashboard' && !showWebMirror ? (
             <section className="parity-panel">
-              <JournalPerformanceParity snapshot={performanceSnapshot} heroTitle="Dashboard" showHero={false} showTitleRow={false} />
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Dashboard</h2>
+                  <p className="text-zinc-500 dark:text-zinc-400">Monitor your active positions and performance.</p>
+                </div>
+                <TradingStats
+                  trades={dashboardWebTrades as any[]}
+                  rightAux={<CalendarPnL trades={dashboardWebTrades as any[]} />}
+                />
+              </div>
             </section>
           ) : null}
 
