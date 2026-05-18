@@ -1237,6 +1237,7 @@ export default function App() {
 
           {activeTab === 'cuentas' && !showWebMirror ? (
             <section className="parity-panel">
+              <JournalDashboardParity snapshot={dashboardSnapshot} title="Cuentas" />
               <div className="parity-grid metrics">
                 <article>
                   <span>Session User</span>
@@ -1267,6 +1268,15 @@ export default function App() {
 
           {activeTab === 'transacciones' && !showWebMirror ? (
             <section className="parity-panel">
+              <JournalPerformanceParity
+                snapshot={performanceSnapshot}
+                title="Transacciones"
+                heroTitle="Transacciones"
+                heroSubtitle="Order and trade timeline with execution context."
+                ctaLabel="Nueva Operación"
+                showHero={false}
+                showTitleRow={false}
+              />
               <article className="parity-card">
                 <h3>Pending Orders ({pendingOrdersView.length})</h3>
                 <div className="mini-table">
