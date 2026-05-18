@@ -1,4 +1,8 @@
-const ASSETS_BASE_URL = (process.env.ASSETS_BASE_URL || '').trim().replace(/\/+$/, '');
+const runtimeProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+const runtimeEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+const ASSETS_BASE_URL = (runtimeEnv?.VITE_ASSETS_BASE_URL || runtimeEnv?.ASSETS_BASE_URL || runtimeProcess?.env?.ASSETS_BASE_URL || '')
+  .trim()
+  .replace(/\/+$/, '');
 
 export function toAssetUrl(pathOrUrl: string): string {
   if (!pathOrUrl) return pathOrUrl;

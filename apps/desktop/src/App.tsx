@@ -14,23 +14,25 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import {
-  buildDashboardSnapshotFromDesktop,
-  buildPerformanceSnapshotFromDesktopTrades,
   JOURNAL_DESKTOP_TABS,
   getDesktopTab,
   type JournalDesktopTabId,
   type JournalIconKey,
 } from '@trading-journal/journal-data';
 import {
+  AccountBalance,
+  ActiveTrades,
+  AlertsSettingsPanel,
   CalendarPnL,
-  JournalDashboardParity,
-  JournalPerformanceParity,
+  DayTradingTable,
   PortfolioList,
   TradingStats,
+  TransactionList,
 } from '@trading-journal/journal-ui';
 import { AIAnalysisPanel } from './components/AIAnalysisPanel';
 import { ChatDesk } from './components/ChatDesk';
 import { CVDPanel } from './components/CVDPanel';
+import { DesktopApolloProvider } from './components/DesktopApolloProvider';
 import { FootprintPanel } from './components/FootprintPanel';
 import { JournalSidebar } from './components/JournalSidebar';
 import { LiquidationPanel } from './components/LiquidationPanel';
@@ -82,6 +84,7 @@ import type {
   SLTPMoveInput,
   Timeframe,
 } from './types';
+import { useRealTimePnL } from '../../../src/hooks/useRealTimePnL';
 
 function formatDateIso(iso: string | null | undefined) {
   if (!iso) return '-';
@@ -266,7 +269,6 @@ export default function App() {
   });
 
   const openTradesView = useMemo(() => cockpit?.openTrades || [], [cockpit?.openTrades]);
-  const pendingOrdersView = useMemo(() => cockpit?.pendingOrders || [], [cockpit?.pendingOrders]);
   const dashboardWebTrades = useMemo(
     () =>
       desktopTrades.filter((trade) => {
@@ -276,11 +278,6 @@ export default function App() {
         if (!strategy || strategy.toLowerCase() === 'null') return true;
         return strategy.toUpperCase() === 'TRADING';
       }),
-    [desktopTrades]
-  );
-  const dashboardSnapshot = useMemo(() => buildDashboardSnapshotFromDesktop(cockpit || null), [cockpit]);
-  const performanceSnapshot = useMemo(
-    () => buildPerformanceSnapshotFromDesktopTrades(desktopTrades),
     [desktopTrades]
   );
   const activeTrade = openTradesView[0] || null;
@@ -329,6 +326,25 @@ export default function App() {
     const explicit = (import.meta.env.VITE_WEB_APP_URL || '').trim();
     return explicit || backendUrl;
   }, [backendUrl]);
+  const { calculateRealTimePnL, prices: parityPrices, tradeExtremes } = useRealTimePnL(
+    desktopTrades as any[],
+    ['USDCOP=X']
+  );
+  const tradesWithRealTimePnL = useMemo(
+    () =>
+      dashboardWebTrades.map((trade) => {
+        const status = readString(trade, 'estado', '').toUpperCase();
+        const orderType = readString(trade, 'order_type', 'MARKET').toUpperCase();
+        const entryStatus = readString(trade, 'entry_order_status', 'FILLED').toUpperCase();
+        const isLive = status === 'OPEN' && (orderType !== 'LIMIT' || entryStatus === 'FILLED' || entryStatus === 'PARTIALLY_FILLED');
+        if (!isLive) return trade;
+        return {
+          ...trade,
+          pnl_realizado: calculateRealTimePnL(trade as any),
+        };
+      }),
+    [calculateRealTimePnL, dashboardWebTrades]
+  );
 
   const loadDesktopState = useCallback(
     async (accessToken: string) => {
@@ -664,6 +680,37 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window);
+    const normalizedBase = backendUrl.trim().replace(/\/+$/, '');
+    const accessToken = tokens?.accessToken || '';
+
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      let nextInput: RequestInfo | URL = input;
+      const requestInit: RequestInit = { ...(init || {}) };
+
+      if (typeof input === 'string' && input.startsWith('/api/') && normalizedBase) {
+        nextInput = `${normalizedBase}${input}`;
+      } else if (input instanceof Request && input.url.startsWith('/api/') && normalizedBase) {
+        nextInput = `${normalizedBase}${input.url}`;
+      }
+
+      if (accessToken && typeof nextInput === 'string' && nextInput.includes('/api/')) {
+        const headers = new Headers(requestInit.headers || {});
+        if (!headers.has('Authorization')) {
+          headers.set('Authorization', `Bearer ${accessToken}`);
+        }
+        requestInit.headers = headers;
+      }
+
+      return originalFetch(nextInput as any, requestInit);
+    };
+
+    return () => {
+      window.fetch = originalFetch as typeof window.fetch;
+    };
+  }, [backendUrl, tokens?.accessToken]);
+
   async function handleRefreshCockpit() {
     if (!tokens?.accessToken) return;
     setBusy(true);
@@ -956,7 +1003,8 @@ export default function App() {
           </main>
         </>
       ) : (
-        <main className="desktop-parity-shell">
+        <DesktopApolloProvider tokens={tokens}>
+          <main className="desktop-parity-shell">
           <aside className="desktop-parity-sidebar">
             <div className="desktop-parity-brand">
               <span className="desktop-parity-badge">TJ</span>
@@ -1153,41 +1201,46 @@ export default function App() {
                   <h2 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Dashboard</h2>
                   <p className="text-zinc-500 dark:text-zinc-400">Monitor your active positions and performance.</p>
                 </div>
-                <TradingStats
+                <ActiveTrades
                   trades={dashboardWebTrades as any[]}
+                  prices={parityPrices}
+                  calculateRealTimePnL={calculateRealTimePnL}
+                  tradeExtremes={tradeExtremes}
+                />
+                <TradingStats
+                  trades={tradesWithRealTimePnL as any[]}
                   rightAux={<CalendarPnL trades={dashboardWebTrades as any[]} />}
+                />
+                <DayTradingTable
+                  trades={dashboardWebTrades as any[]}
+                  loading={busy && !dashboardWebTrades.length}
+                  error={null}
+                  prices={parityPrices}
+                  calculateRealTimePnL={calculateRealTimePnL}
+                  tradeExtremes={tradeExtremes}
+                  onRefresh={handleRefreshCockpit}
                 />
               </div>
             </section>
           ) : null}
 
-          {activeTab === 'live-market' ? (
+          {activeTab === 'live-market' && !showWebMirror ? (
             <section className="parity-panel">
-              <JournalPerformanceParity
-                snapshot={performanceSnapshot}
-                title="Live Market Activity"
-                heroTitle="Live Market Activity"
-                heroSubtitle="Review execution outcomes and market behavior in one feed."
-                ctaLabel="Nueva Operación"
-                showHero={false}
-                showTitleRow={false}
-              />
-              <article className="parity-card">
-                <div className="card-title-row">
-                  <h3>Backend Events</h3>
-                  <span className="tag">WSS</span>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Live Market Activity</h2>
+                  <p className="text-zinc-500 dark:text-zinc-400">Execution timeline and market context.</p>
                 </div>
-                <div className="event-list">
-                  {backendEvents.slice(-36).reverse().map((event, index) => (
-                    <article key={`${event.timestamp}-${index}`}>
-                      <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
-                      <b>{event.type}</b>
-                      <small>{readString(event.payload as Record<string, unknown>, 'source', '-')}</small>
-                    </article>
-                  ))}
-                  {!backendEvents.length ? <p className="muted">Waiting for live events...</p> : null}
-                </div>
-              </article>
+                <DayTradingTable
+                  trades={dashboardWebTrades as any[]}
+                  loading={busy && !dashboardWebTrades.length}
+                  error={null}
+                  prices={parityPrices}
+                  calculateRealTimePnL={calculateRealTimePnL}
+                  tradeExtremes={tradeExtremes}
+                  onRefresh={handleRefreshCockpit}
+                />
+              </div>
             </section>
           ) : null}
 
@@ -1237,128 +1290,29 @@ export default function App() {
 
           {activeTab === 'cuentas' && !showWebMirror ? (
             <section className="parity-panel">
-              <JournalDashboardParity snapshot={dashboardSnapshot} title="Cuentas" />
-              <div className="parity-grid metrics">
-                <article>
-                  <span>Session User</span>
-                  <strong>{session?.user?.name || session?.user?.email || '-'}</strong>
-                </article>
-                <article>
-                  <span>Balance</span>
-                  <strong>{formatNumber(cockpit?.account?.balanceUsdt, 2)} USDT</strong>
-                </article>
-                <article>
-                  <span>Max Risk</span>
-                  <strong>{formatNumber(cockpit?.account?.maxRisk?.amount, 2)} USDT</strong>
-                </article>
-                <article>
-                  <span>Discipline</span>
-                  <strong>{cockpit?.discipline?.blocked ? 'Blocked' : 'Clear'}</strong>
-                </article>
-              </div>
-              <article className="parity-card">
-                <h3>Desktop Session</h3>
-                <p className="muted">Device: {session?.deviceSession?.clientName || '-'}</p>
-                <p className="muted">Platform: {session?.deviceSession?.clientPlatform || '-'}</p>
-                <p className="muted">Updated: {formatDateIso(session?.deviceSession?.updatedAt || null)}</p>
-                <p className="muted">Backend WSS: {backendWsStatus}</p>
-              </article>
+              <AccountBalance
+                trades={dashboardWebTrades as any[]}
+                prices={parityPrices}
+                calculateRealTimePnL={calculateRealTimePnL}
+              />
             </section>
           ) : null}
 
           {activeTab === 'transacciones' && !showWebMirror ? (
             <section className="parity-panel">
-              <JournalPerformanceParity
-                snapshot={performanceSnapshot}
-                title="Transacciones"
-                heroTitle="Transacciones"
-                heroSubtitle="Order and trade timeline with execution context."
-                ctaLabel="Nueva Operación"
-                showHero={false}
-                showTitleRow={false}
-              />
-              <article className="parity-card">
-                <h3>Pending Orders ({pendingOrdersView.length})</h3>
-                <div className="mini-table">
-                  <div><b>ID</b><b>Symbol</b><b>Side</b><b>Entry</b><b>Status</b></div>
-                  {pendingOrdersView.slice(0, 28).map((row, idx) => (
-                    <div key={`pending-${idx}`}>
-                      <span>#{readString(row, 'id', '-')}</span>
-                      <span>{readString(row, 'simbolo', '-')}</span>
-                      <span>{readString(row, 'direccion', '-')}</span>
-                      <span>{formatNumber(readNumber(row, 'entry_price'), 4)}</span>
-                      <span>{readString(row, 'order_status', '-')}</span>
-                    </div>
-                  ))}
-                  {!pendingOrdersView.length ? <p className="muted">No pending orders.</p> : null}
-                </div>
-              </article>
-              <article className="parity-card">
-                <h3>Recent Event Stream</h3>
-                <div className="event-list">
-                  {backendEvents.slice(-40).reverse().map((event, index) => (
-                    <article key={`txn-event-${event.timestamp}-${index}`}>
-                      <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
-                      <b>{event.type}</b>
-                      <small>{readString(event.payload as Record<string, unknown>, 'source', '-')}</small>
-                    </article>
-                  ))}
-                  {!backendEvents.length ? <p className="muted">No events yet.</p> : null}
-                </div>
-              </article>
+              <TransactionList />
             </section>
           ) : null}
 
           {activeTab === 'alertas' && !showWebMirror ? (
             <section className="parity-panel">
-              <div className="parity-grid two-cols">
-                <article className="parity-card">
-                  <h3>Risk Alerts</h3>
-                  <p className={cockpit?.discipline?.blocked ? 'negative' : 'positive'}>
-                    {cockpit?.discipline?.blocked ? 'Trading cooldown active' : 'No active cooldown'}
-                  </p>
-                  <p className="muted">
-                    Remaining sec: {cockpit?.discipline?.remainingSeconds ?? 0}
-                  </p>
-                  <p className="muted">
-                    Blocked until: {formatDateIso(cockpit?.discipline?.blockedUntil || null)}
-                  </p>
-                </article>
-                <article className="parity-card">
-                  <h3>Connectivity Alerts</h3>
-                  <p className={/connected/i.test(backendWsStatus) ? 'positive' : 'negative'}>
-                    {backendWsStatus}
-                  </p>
-                  <p className="muted">
-                    Market stream: {market.status}
-                  </p>
-                  <p className="muted">
-                    Last sync: {formatDateIso(lastSyncAt)}
-                  </p>
-                </article>
-              </div>
-              <article className="parity-card">
-                <h3>Alert Event Feed</h3>
-                <div className="event-list">
-                  {backendEvents
-                    .filter((event) => event.type.includes('risk') || event.type.includes('snapshot') || event.type.includes('ai'))
-                    .slice(-28)
-                    .reverse()
-                    .map((event, index) => (
-                      <article key={`alert-event-${event.timestamp}-${index}`}>
-                        <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
-                        <b>{event.type}</b>
-                        <small>{readString(event.payload as Record<string, unknown>, 'source', '-')}</small>
-                      </article>
-                    ))}
-                  {!backendEvents.length ? <p className="muted">No alert events yet.</p> : null}
-                </div>
-              </article>
+              <AlertsSettingsPanel />
             </section>
           ) : null}
             </div>
           </section>
-        </main>
+          </main>
+        </DesktopApolloProvider>
       )}
     </div>
   );
