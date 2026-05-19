@@ -19,18 +19,18 @@ function buildAuthHeaders(tokens: DesktopTokens | null) {
 }
 
 function resolveGraphqlHttpUrl() {
-  if (import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '1') !== '0') {
+  if (import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '0') !== '0') {
     return '/v1/graphql';
   }
-  return (import.meta.env.VITE_HASURA_HTTP_URL || 'https://journal.agentame.xyz/v1/graphql').trim();
+  return (import.meta.env.VITE_HASURA_HTTP_URL || 'https://hasura.agentame.xyz/v1/graphql').trim();
 }
 
 function resolveGraphqlWsUrl() {
-  if (import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '1') !== '0' && typeof window !== 'undefined') {
+  if (import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '0') !== '0' && typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${protocol}//${window.location.host}/v1/graphql`;
   }
-  return (import.meta.env.VITE_HASURA_WS_URL || 'wss://journal.agentame.xyz/v1/graphql').trim();
+  return (import.meta.env.VITE_HASURA_WS_URL || 'wss://hasura.agentame.xyz/v1/graphql').trim();
 }
 
 export function DesktopApolloProvider({ children, tokens }: DesktopApolloProviderProps) {

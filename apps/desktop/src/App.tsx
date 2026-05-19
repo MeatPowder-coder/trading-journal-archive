@@ -684,7 +684,7 @@ export default function App() {
     const originalFetch = window.fetch.bind(window);
     const normalizedBase = backendUrl.trim().replace(/\/+$/, '');
     const accessToken = tokens?.accessToken || '';
-    const useDevProxy = import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '1') !== '0';
+    const useDevProxy = import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '0') !== '0';
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       let nextInput: RequestInfo | URL = input;

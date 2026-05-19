@@ -21,7 +21,7 @@ export function defaultBackendUrl() {
 }
 
 function useDevProxy() {
-  return import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '1') !== '0';
+  return import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '0') !== '0';
 }
 
 function normalizeBaseUrl(baseUrl: string) {
