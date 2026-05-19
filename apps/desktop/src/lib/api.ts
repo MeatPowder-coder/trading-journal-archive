@@ -20,6 +20,10 @@ export function defaultBackendUrl() {
   return 'https://journal.agentame.xyz';
 }
 
+function useDevProxy() {
+  return import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '1') !== '0';
+}
+
 function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.trim().replace(/\/+$/, '');
 }
@@ -36,7 +40,7 @@ function apiFallbackBaseUrls(baseUrl: string) {
     fallbacks.push(normalizeBaseUrl(explicit));
   }
 
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && String(import.meta.env.VITE_ENABLE_LOCAL_API_FALLBACK || '0') === '1') {
     fallbacks.push('http://127.0.0.1:4000');
   }
 
@@ -45,6 +49,10 @@ function apiFallbackBaseUrls(baseUrl: string) {
 }
 
 function wsBaseUrl(baseUrl: string) {
+  if (useDevProxy() && typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}`;
+  }
   const explicit = (import.meta.env.VITE_WS_URL || '').trim();
   const normalized = normalizeBaseUrl(explicit || baseUrl);
   if (normalized.startsWith('https://')) return `wss://${normalized.slice('https://'.length)}`;
@@ -59,7 +67,7 @@ function wsFallbackBaseUrls(baseUrl: string) {
     fallbacks.push(normalizeBaseUrl(explicit));
   }
 
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && String(import.meta.env.VITE_ENABLE_LOCAL_API_FALLBACK || '0') === '1') {
     fallbacks.push('ws://127.0.0.1:4000');
   }
 
@@ -127,7 +135,11 @@ async function fetchBinancePublicPrice(symbol: string) {
 async function fetchYahooProxyPrice(baseUrl: string, ticker: string) {
   const normalized = normalizeTicker(ticker);
   if (!normalized) return null;
-  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/api/yahoo-price/${encodeURIComponent(normalized)}`);
+  const response = await fetch(
+    useDevProxy()
+      ? `/api/yahoo-price/${encodeURIComponent(normalized)}`
+      : `${normalizeBaseUrl(baseUrl)}/api/yahoo-price/${encodeURIComponent(normalized)}`
+  );
   if (!response.ok) return null;
   const payload = await response.json().catch(() => null as any);
   const closes = payload?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
@@ -148,11 +160,14 @@ async function fetchApiJsonWithFallback<T>(params: {
   path: string;
   init?: RequestInit;
 }) {
-  const candidates = [apiBaseUrl(params.baseUrl), ...apiFallbackBaseUrls(params.baseUrl)];
+  const candidates: (string | null)[] = useDevProxy()
+    ? [null, ...apiFallbackBaseUrls(params.baseUrl)]
+    : [apiBaseUrl(params.baseUrl), ...apiFallbackBaseUrls(params.baseUrl)];
   let lastError: unknown = new Error('Request failed');
 
   for (let i = 0; i < candidates.length; i += 1) {
-    const url = `${candidates[i]}${params.path}`;
+    const base = candidates[i];
+    const url = base ? `${base}${params.path}` : params.path;
     try {
       const response = await fetch(url, params.init);
       if (i < candidates.length - 1 && shouldTryApiFallback(response.status)) {
@@ -173,7 +188,7 @@ export async function startDesktopPairing(params: {
   clientName: string;
   clientPlatform: string;
 }) {
-  const res = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/auth/start`, {
+  const res = await fetch(useDevProxy() ? '/api/desktop/auth/start' : `${normalizeBaseUrl(params.baseUrl)}/api/desktop/auth/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -189,7 +204,7 @@ export async function pollDesktopPairing(params: {
   pairingId: string;
   pollToken: string;
 }) {
-  const res = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/auth/poll`, {
+  const res = await fetch(useDevProxy() ? '/api/desktop/auth/poll' : `${normalizeBaseUrl(params.baseUrl)}/api/desktop/auth/poll`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -204,7 +219,7 @@ export async function refreshDesktopTokens(params: {
   baseUrl: string;
   refreshToken: string;
 }) {
-  const res = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/auth/refresh`, {
+  const res = await fetch(useDevProxy() ? '/api/desktop/auth/refresh' : `${normalizeBaseUrl(params.baseUrl)}/api/desktop/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken: params.refreshToken }),
@@ -220,7 +235,7 @@ export async function revokeDesktopSession(params: {
   baseUrl: string;
   accessToken: string;
 }) {
-  const res = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/auth/revoke`, {
+  const res = await fetch(useDevProxy() ? '/api/desktop/auth/revoke' : `${normalizeBaseUrl(params.baseUrl)}/api/desktop/auth/revoke`, {
     method: 'POST',
     headers: authHeaders(params.accessToken),
   });
@@ -240,7 +255,7 @@ export async function fetchDesktopSession(params: {
       },
     });
   } catch {
-    const legacy = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/session`, {
+    const legacy = await fetch(useDevProxy() ? '/api/desktop/session' : `${normalizeBaseUrl(params.baseUrl)}/api/desktop/session`, {
       headers: authHeaders(params.accessToken),
     });
     return parseJsonOrThrow<DesktopSessionResponse>(legacy);
@@ -260,7 +275,7 @@ export async function fetchDesktopCockpit(params: {
       },
     });
   } catch {
-    const legacy = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/cockpit`, {
+    const legacy = await fetch(useDevProxy() ? '/api/desktop/cockpit' : `${normalizeBaseUrl(params.baseUrl)}/api/desktop/cockpit`, {
       headers: authHeaders(params.accessToken),
     });
     return parseJsonOrThrow<DesktopCockpitResponse>(legacy);
@@ -300,9 +315,12 @@ export async function fetchDesktopTrades(params: {
       },
     });
   } catch {
-    const legacy = await fetch(`${normalizeBaseUrl(params.baseUrl)}/api/desktop/trades${suffix}`, {
+    const legacy = await fetch(
+      useDevProxy() ? `/api/desktop/trades${suffix}` : `${normalizeBaseUrl(params.baseUrl)}/api/desktop/trades${suffix}`,
+      {
       headers: authHeaders(params.accessToken),
-    });
+      }
+    );
     return parseJsonOrThrow<DesktopTradesResponse>(legacy);
   }
 }
