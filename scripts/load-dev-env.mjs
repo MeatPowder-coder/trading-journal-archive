@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import dotenv from 'dotenv';
 
 function sanitizeWindowsEnv(rawEnv) {
   return Object.fromEntries(
@@ -10,10 +9,46 @@ function sanitizeWindowsEnv(rawEnv) {
   );
 }
 
+function parseEnvContent(content) {
+  const parsed = {};
+  const lines = String(content || '').split(/\r?\n/);
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const normalized = line.startsWith('export ') ? line.slice(7).trim() : line;
+    const eqIndex = normalized.indexOf('=');
+    if (eqIndex <= 0) continue;
+
+    const key = normalized.slice(0, eqIndex).trim();
+    if (!key) continue;
+
+    let value = normalized.slice(eqIndex + 1).trim();
+    if (!value) {
+      parsed[key] = '';
+      continue;
+    }
+
+    const first = value[0];
+    const last = value[value.length - 1];
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      value = value.slice(1, -1);
+    } else {
+      const hashIndex = value.indexOf(' #');
+      if (hashIndex >= 0) value = value.slice(0, hashIndex).trim();
+    }
+
+    parsed[key] = value;
+  }
+
+  return parsed;
+}
+
 function readEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return {};
   const content = fs.readFileSync(filePath, 'utf8');
-  return dotenv.parse(content);
+  return parseEnvContent(content);
 }
 
 export function buildDevChildEnv(baseEnv, { isWindows }) {
@@ -32,4 +67,3 @@ export function buildDevChildEnv(baseEnv, { isWindows }) {
     ...envFromFiles,
   };
 }
-
