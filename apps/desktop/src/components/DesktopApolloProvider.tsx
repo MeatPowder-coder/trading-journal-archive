@@ -48,8 +48,11 @@ function hasHasuraClaims(tokens: DesktopTokens | null) {
   return Boolean(claims && typeof claims === 'object');
 }
 
-function resolveGraphqlHttpUrl() {
+function resolveGraphqlHttpUrl(tokens: DesktopTokens | null) {
   if (useDevProxy()) {
+    if (!hasHasuraClaims(tokens)) {
+      return '/api/desktop/graphql';
+    }
     return '/v1/graphql';
   }
   return (import.meta.env.VITE_HASURA_HTTP_URL || 'https://hasura.agentame.xyz/v1/graphql').trim();
@@ -67,7 +70,7 @@ export function DesktopApolloProvider({ children, tokens }: DesktopApolloProvide
   const client = useMemo(() => {
     const headers = buildAuthHeaders(tokens);
     const httpLink = new HttpLink({
-      uri: resolveGraphqlHttpUrl(),
+      uri: resolveGraphqlHttpUrl(tokens),
       headers,
     });
 

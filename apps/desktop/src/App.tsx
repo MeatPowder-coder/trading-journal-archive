@@ -319,7 +319,10 @@ export default function App() {
   });
 
   const openTradesView = useMemo(() => cockpit?.openTrades || [], [cockpit?.openTrades]);
-  const hasGraphqlAccess = Boolean(tokens?.accessToken && hasHasuraClaims(tokens.accessToken));
+  const hasGraphqlAccess = Boolean(
+    tokens?.accessToken &&
+      (hasHasuraClaims(tokens.accessToken) || import.meta.env.DEV)
+  );
   const dashboardWebTrades = useMemo(
     () =>
       desktopTrades.filter((trade) => {
