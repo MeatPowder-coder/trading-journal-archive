@@ -56,14 +56,30 @@ function readEnvFile(filePath) {
   return parseEnvContent(content);
 }
 
+function summarizeDbSource(entries) {
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const [filePath, parsed] = entries[i];
+    const value = parsed?.DATABASE_URL;
+    if (typeof value === 'string' && value.trim()) {
+      return { filePath, value: value.trim() };
+    }
+  }
+  return null;
+}
+
 export function buildDevChildEnv(baseEnv, { isWindows }) {
   const initial = isWindows ? sanitizeWindowsEnv(baseEnv) : { ...baseEnv };
   const cwd = process.cwd();
 
-  const envFromFilesRaw = {
-    ...readEnvFile(path.join(cwd, '.env')),
-    ...readEnvFile(path.join(cwd, '.env.local')),
-  };
+  const fileEntries = [
+    [path.join(cwd, '.env'), readEnvFile(path.join(cwd, '.env'))],
+    [path.join(cwd, '.env.local'), readEnvFile(path.join(cwd, '.env.local'))],
+  ];
+
+  const envFromFilesRaw = {};
+  for (const [, parsed] of fileEntries) {
+    Object.assign(envFromFilesRaw, parsed);
+  }
 
   const envFromFiles = isWindows
     ? Object.fromEntries(
@@ -88,6 +104,15 @@ export function buildDevChildEnv(baseEnv, { isWindows }) {
     delete merged.PGDATABASE;
     delete merged.PGSSLMODE;
     delete merged.PGSERVICE;
+  }
+
+  const dbSource = summarizeDbSource(fileEntries);
+  if (dbSource) {
+    console.log(`[dev-env] DATABASE_URL loaded from ${dbSource.filePath}`);
+  } else if (typeof merged.DATABASE_URL === 'string' && merged.DATABASE_URL.trim().length > 0) {
+    console.log('[dev-env] DATABASE_URL comes from inherited process environment');
+  } else {
+    console.warn('[dev-env] DATABASE_URL is missing in both .env/.env.local and process env');
   }
 
   return merged;
