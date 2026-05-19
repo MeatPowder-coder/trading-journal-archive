@@ -5,6 +5,23 @@ const isWin = process.platform === 'win32';
 const pnpmCmd = isWin ? (process.env.ComSpec || 'cmd.exe') : 'pnpm';
 const childEnv = buildDevChildEnv(process.env, { isWindows: isWin });
 
+function logDatabaseTarget(url) {
+  if (typeof url !== 'string' || !url.trim()) {
+    console.warn('[desktop-backend] DATABASE_URL is not set for child processes');
+    return;
+  }
+  try {
+    const parsed = new URL(url);
+    console.log(
+      `[desktop-backend] DATABASE_URL -> ${parsed.protocol}//${parsed.hostname}:${parsed.port || '5432'}${parsed.pathname}`
+    );
+  } catch {
+    console.log('[desktop-backend] DATABASE_URL appears to be set (unparseable URL format)');
+  }
+}
+
+logDatabaseTarget(childEnv.DATABASE_URL);
+
 const tasks = [
   { name: 'journal', script: 'dev:journal' },
   { name: 'api', script: 'dev:api' },

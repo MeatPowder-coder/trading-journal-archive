@@ -11,8 +11,10 @@ function applyParsedEnv(
   options: { initialKeys: Set<string>; overrideLoaded: boolean }
 ) {
   for (const [key, value] of Object.entries(parsed)) {
-    if (options.initialKeys.has(key)) continue;
-    if (!options.overrideLoaded && process.env[key] !== undefined) continue;
+    if (!options.overrideLoaded) {
+      if (options.initialKeys.has(key)) continue;
+      if (process.env[key] !== undefined) continue;
+    }
     process.env[key] = value;
   }
 }
