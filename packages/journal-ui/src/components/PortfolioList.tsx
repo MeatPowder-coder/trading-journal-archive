@@ -32,6 +32,43 @@ interface PortfolioListProps {
   prices: any;
 }
 
+function normalizeTicker(value: string | null | undefined) {
+  if (!value) return "";
+  return value.trim().toUpperCase().replace(/\s+/g, "").replace(/\//g, "");
+}
+
+function resolveCurrentPrice(trade: Trade, prices: Record<string, number>) {
+  const rawTicker = normalizeTicker(trade.ticker_api);
+  const rawSymbol = normalizeTicker(trade.simbolo);
+  const candidates = new Set<string>();
+
+  const add = (value: string) => {
+    const normalized = normalizeTicker(value);
+    if (normalized) candidates.add(normalized);
+  };
+
+  add(rawTicker);
+  add(rawSymbol);
+
+  // Base asset helpers: ETH -> ETHUSDT / ETHUSD and reverse for ETHUSDT -> ETH
+  const withBases = [rawTicker, rawSymbol].filter(Boolean);
+  for (const token of withBases) {
+    if (token.endsWith("USDT")) add(token.slice(0, -4));
+    if (token.endsWith("USD")) add(token.slice(0, -3));
+    if (!token.includes("-") && !token.endsWith("USDT") && !token.endsWith("USD")) {
+      add(`${token}USDT`);
+      add(`${token}USD`);
+    }
+  }
+
+  for (const key of candidates) {
+    const value = Number(prices?.[key]);
+    if (Number.isFinite(value) && value > 0) return value;
+  }
+
+  return null;
+}
+
 export function PortfolioList({ trades, loading, prices }: PortfolioListProps) {
   if (loading) {
     return (
@@ -67,7 +104,7 @@ export function PortfolioList({ trades, loading, prices }: PortfolioListProps) {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {holdingTrades.map((trade) => {
         const ticker = trade.ticker_api ? trade.ticker_api.trim().toUpperCase() : null;
-        const currentPrice = ticker ? prices[ticker] : null;
+        const currentPrice = resolveCurrentPrice(trade, prices || {});
         const isOpen = trade.estado === "ABIERTO" || trade.estado === "OPEN";
 
         // Logic for Real-time PnL Calculation
