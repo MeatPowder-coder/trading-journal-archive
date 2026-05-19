@@ -1,11 +1,18 @@
 import { spawn } from 'node:child_process';
 
 const isWin = process.platform === 'win32';
-const pnpmCmd = isWin ? 'pnpm.cmd' : 'pnpm';
+const pnpmCmd = isWin ? (process.env.ComSpec || 'cmd.exe') : 'pnpm';
+const childEnv = isWin
+  ? Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([key, value]) => key.length > 0 && !key.startsWith('=') && typeof value === 'string'
+      )
+    )
+  : process.env;
 
 const tasks = [
-  { name: 'journal', args: ['dev:journal'] },
-  { name: 'api', args: ['dev:api'] },
+  { name: 'journal', script: 'dev:journal' },
+  { name: 'api', script: 'dev:api' },
 ];
 
 const children = [];
@@ -26,10 +33,13 @@ function killAll(signal = 'SIGTERM') {
 }
 
 for (const task of tasks) {
-  const child = spawn(pnpmCmd, task.args, {
+  const args = isWin ? ['/d', '/s', '/c', `pnpm run ${task.script}`] : ['run', task.script];
+  const child = spawn(pnpmCmd, args, {
     stdio: 'inherit',
     shell: false,
-    env: process.env,
+    cwd: process.cwd(),
+    env: childEnv,
+    windowsHide: false,
   });
   children.push(child);
 
