@@ -158,6 +158,27 @@ function parsePairingIdFromDeepLink(url: string) {
   }
 }
 
+function parseJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split('.');
+  if (parts.length < 2) return null;
+  try {
+    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padLen = (4 - (normalized.length % 4)) % 4;
+    const padded = normalized.padEnd(normalized.length + padLen, '=');
+    const raw = atob(padded);
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function hasHasuraClaims(accessToken: string) {
+  const payload = parseJwtPayload(accessToken);
+  if (!payload) return false;
+  const claims = payload['https://hasura.io/jwt/claims'];
+  return Boolean(claims && typeof claims === 'object');
+}
+
 function captureChartImageUrl() {
   const canvas = document.querySelector<HTMLCanvasElement>('.candle-chart canvas');
   if (!canvas) return '';
@@ -441,6 +462,25 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!tokens?.accessToken || !tokens.refreshToken) return;
+    if (hasHasuraClaims(tokens.accessToken)) return;
+
+    let disposed = false;
+    rotateTokens(tokens.refreshToken)
+      .then((next) => {
+        if (disposed) return;
+        setMessage(`Desktop tokens upgraded (${next.accessToken.slice(0, 10)}...)`);
+      })
+      .catch(() => {
+        if (!disposed) setMessage('Token upgrade pending');
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, [rotateTokens, tokens?.accessToken, tokens?.refreshToken]);
+
+  useEffect(() => {
     saveBackendUrl(backendUrl);
   }, [backendUrl]);
 
@@ -684,7 +724,12 @@ export default function App() {
     const originalFetch = window.fetch.bind(window);
     const normalizedBase = backendUrl.trim().replace(/\/+$/, '');
     const accessToken = tokens?.accessToken || '';
-    const useDevProxy = import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '0') !== '0';
+    const useDevProxy = (() => {
+      if (!import.meta.env.DEV) return false;
+      const raw = import.meta.env.VITE_USE_DEV_PROXY;
+      if (raw === undefined || raw === null || raw === '') return true;
+      return !['0', 'false', 'no', 'off'].includes(String(raw).trim().toLowerCase());
+    })();
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       let nextInput: RequestInfo | URL = input;

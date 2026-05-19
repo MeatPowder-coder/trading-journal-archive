@@ -10,10 +10,12 @@ export interface DesktopAuthContext {
   name: string | null;
 }
 
-function getJwtSecret() {
-  const secret = (process.env.DESKTOP_AUTH_SECRET || process.env.NEXTAUTH_SECRET || '').trim();
-  if (!secret) throw new Error('Missing DESKTOP_AUTH_SECRET or NEXTAUTH_SECRET');
-  return secret;
+function getJwtSecrets() {
+  const next = (process.env.NEXTAUTH_SECRET || '').trim();
+  const desktop = (process.env.DESKTOP_AUTH_SECRET || '').trim();
+  const secrets = [next, desktop].filter(Boolean);
+  if (!secrets.length) throw new Error('Missing NEXTAUTH_SECRET or DESKTOP_AUTH_SECRET');
+  return Array.from(new Set(secrets));
 }
 
 export function tokenFromRequest(req: FastifyRequest) {
@@ -27,28 +29,33 @@ export function tokenFromRequest(req: FastifyRequest) {
 function decodeDesktopAccessToken(token: string) {
   if (!token) return null;
 
-  try {
-    const decoded = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] });
-    if (!decoded || typeof decoded !== 'object') return null;
+  const secrets = getJwtSecrets();
+  for (const secret of secrets) {
+    try {
+      const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] });
+      if (!decoded || typeof decoded !== 'object') continue;
 
-    const payload = decoded as Record<string, unknown>;
-    if (payload.tokenType !== 'desktop_access') return null;
+      const payload = decoded as Record<string, unknown>;
+      if (payload.tokenType !== 'desktop_access') continue;
 
-    const userId = typeof payload.sub === 'string' ? payload.sub : '';
-    const jti = typeof payload.jti === 'string' ? payload.jti : '';
-    const deviceSessionId = Number(payload.sid);
-    if (!userId || !jti || !Number.isInteger(deviceSessionId) || deviceSessionId <= 0) return null;
+      const userId = typeof payload.sub === 'string' ? payload.sub : '';
+      const jti = typeof payload.jti === 'string' ? payload.jti : '';
+      const deviceSessionId = Number(payload.sid);
+      if (!userId || !jti || !Number.isInteger(deviceSessionId) || deviceSessionId <= 0) continue;
 
-    return {
-      userId,
-      deviceSessionId,
-      jti,
-      email: typeof payload.email === 'string' ? payload.email : null,
-      name: typeof payload.name === 'string' ? payload.name : null,
-    };
-  } catch {
-    return null;
+      return {
+        userId,
+        deviceSessionId,
+        jti,
+        email: typeof payload.email === 'string' ? payload.email : null,
+        name: typeof payload.name === 'string' ? payload.name : null,
+      };
+    } catch {
+      // try next secret
+    }
   }
+
+  return null;
 }
 
 export function resolveDesktopAuthToken(req: FastifyRequest) {

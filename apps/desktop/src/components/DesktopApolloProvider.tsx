@@ -10,6 +10,14 @@ interface DesktopApolloProviderProps {
   tokens: DesktopTokens | null;
 }
 
+function useDevProxy() {
+  if (!import.meta.env.DEV) return false;
+  const raw = import.meta.env.VITE_USE_DEV_PROXY;
+  if (raw === undefined || raw === null || raw === '') return true;
+  const normalized = String(raw).trim().toLowerCase();
+  return !['0', 'false', 'no', 'off'].includes(normalized);
+}
+
 function buildAuthHeaders(tokens: DesktopTokens | null) {
   const headers: Record<string, string> = {};
   if (tokens?.accessToken) {
@@ -19,14 +27,14 @@ function buildAuthHeaders(tokens: DesktopTokens | null) {
 }
 
 function resolveGraphqlHttpUrl() {
-  if (import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '0') !== '0') {
+  if (useDevProxy()) {
     return '/v1/graphql';
   }
   return (import.meta.env.VITE_HASURA_HTTP_URL || 'https://hasura.agentame.xyz/v1/graphql').trim();
 }
 
 function resolveGraphqlWsUrl() {
-  if (import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '0') !== '0' && typeof window !== 'undefined') {
+  if (useDevProxy() && typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${protocol}//${window.location.host}/v1/graphql`;
   }

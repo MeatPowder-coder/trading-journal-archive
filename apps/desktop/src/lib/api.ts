@@ -20,8 +20,17 @@ export function defaultBackendUrl() {
   return 'https://journal.agentame.xyz';
 }
 
+function readEnvFlag(raw: unknown, defaultValue: boolean) {
+  if (raw === undefined || raw === null || raw === '') return defaultValue;
+  const normalized = String(raw).trim().toLowerCase();
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  return defaultValue;
+}
+
 function useDevProxy() {
-  return import.meta.env.DEV && String(import.meta.env.VITE_USE_DEV_PROXY || '0') !== '0';
+  if (!import.meta.env.DEV) return false;
+  return readEnvFlag(import.meta.env.VITE_USE_DEV_PROXY, true);
 }
 
 function normalizeBaseUrl(baseUrl: string) {

@@ -18,6 +18,11 @@ export interface DesktopTokenPayload extends jwt.JwtPayload {
   jti: string;
   email?: string | null;
   name?: string | null;
+  'https://hasura.io/jwt/claims'?: {
+    'x-hasura-allowed-roles': string[];
+    'x-hasura-default-role': string;
+    'x-hasura-user-id': string;
+  };
 }
 
 export interface DesktopAccessContext {
@@ -61,12 +66,19 @@ export function getRefreshTtlSeconds() {
   );
 }
 
-function getDesktopJwtSecret() {
-  const secret = (process.env.DESKTOP_AUTH_SECRET || process.env.NEXTAUTH_SECRET || '').trim();
+function getDesktopJwtSigningSecret() {
+  const secret = (process.env.NEXTAUTH_SECRET || process.env.DESKTOP_AUTH_SECRET || '').trim();
   if (!secret) {
-    throw new Error('Missing DESKTOP_AUTH_SECRET or NEXTAUTH_SECRET');
+    throw new Error('Missing NEXTAUTH_SECRET or DESKTOP_AUTH_SECRET');
   }
   return secret;
+}
+
+function getDesktopJwtVerificationSecrets() {
+  const next = (process.env.NEXTAUTH_SECRET || '').trim();
+  const desktop = (process.env.DESKTOP_AUTH_SECRET || '').trim();
+  const candidates = [next, desktop].filter(Boolean);
+  return Array.from(new Set(candidates));
 }
 
 export function hashToken(value: string) {
@@ -100,9 +112,14 @@ export function createDesktopAccessToken(params: {
     jti,
     email: params.email || null,
     name: params.name || null,
+    'https://hasura.io/jwt/claims': {
+      'x-hasura-allowed-roles': ['user'],
+      'x-hasura-default-role': 'user',
+      'x-hasura-user-id': params.userId,
+    },
   };
 
-  const token = jwt.sign(payload, getDesktopJwtSecret(), {
+  const token = jwt.sign(payload, getDesktopJwtSigningSecret(), {
     algorithm: 'HS256',
     expiresIn: ttl,
   });
@@ -131,7 +148,7 @@ export function createDesktopRefreshToken(params: {
     name: params.name || null,
   };
 
-  const token = jwt.sign(payload, getDesktopJwtSecret(), {
+  const token = jwt.sign(payload, getDesktopJwtSigningSecret(), {
     algorithm: 'HS256',
     expiresIn: ttl,
   });
@@ -145,32 +162,39 @@ export function createDesktopRefreshToken(params: {
 }
 
 export function verifyDesktopToken(token: string, expectedType: DesktopTokenType) {
-  try {
-    const decoded = jwt.verify(token, getDesktopJwtSecret(), {
-      algorithms: ['HS256'],
-    });
+  const secrets = getDesktopJwtVerificationSecrets();
+  if (!secrets.length) return null;
 
-    if (!decoded || typeof decoded !== 'object') return null;
-    const payload = decoded as Partial<DesktopTokenPayload>;
-    if (payload.tokenType !== expectedType) return null;
+  for (const secret of secrets) {
+    try {
+      const decoded = jwt.verify(token, secret, {
+        algorithms: ['HS256'],
+      });
 
-    const sub = typeof payload.sub === 'string' ? payload.sub : null;
-    const jti = typeof payload.jti === 'string' ? payload.jti : null;
-    const sid = Number(payload.sid);
-    if (!sub || !jti || !Number.isInteger(sid) || sid <= 0) return null;
+      if (!decoded || typeof decoded !== 'object') continue;
+      const payload = decoded as Partial<DesktopTokenPayload>;
+      if (payload.tokenType !== expectedType) continue;
 
-    return {
-      ...payload,
-      sub,
-      sid,
-      jti,
-      tokenType: expectedType,
-      email: typeof payload.email === 'string' ? payload.email : null,
-      name: typeof payload.name === 'string' ? payload.name : null,
-    } as DesktopTokenPayload;
-  } catch {
-    return null;
+      const sub = typeof payload.sub === 'string' ? payload.sub : null;
+      const jti = typeof payload.jti === 'string' ? payload.jti : null;
+      const sid = Number(payload.sid);
+      if (!sub || !jti || !Number.isInteger(sid) || sid <= 0) continue;
+
+      return {
+        ...payload,
+        sub,
+        sid,
+        jti,
+        tokenType: expectedType,
+        email: typeof payload.email === 'string' ? payload.email : null,
+        name: typeof payload.name === 'string' ? payload.name : null,
+      } as DesktopTokenPayload;
+    } catch {
+      // try next secret
+    }
   }
+
+  return null;
 }
 
 export function getBearerToken(req: NextRequest) {
