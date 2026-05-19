@@ -4,19 +4,17 @@ import path from 'node:path';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '');
-  const isDev = mode !== 'production';
+  const defaultBackend = (env.VITE_BACKEND_URL || 'https://journal.agentame.xyz').trim();
 
   const apiProxyTarget =
     env.VITE_DEV_API_PROXY_TARGET ||
     env.VITE_API_URL ||
-    env.VITE_BACKEND_URL ||
-    'http://127.0.0.1:4000';
+    defaultBackend;
 
   const webProxyTarget =
     env.VITE_DEV_WEB_PROXY_TARGET ||
     env.VITE_WEB_APP_URL ||
-    env.VITE_BACKEND_URL ||
-    (isDev ? 'http://127.0.0.1:3000' : 'https://journal.agentame.xyz');
+    defaultBackend;
 
   const hasuraHttpUrl = env.VITE_HASURA_HTTP_URL || 'https://hasura.agentame.xyz/v1/graphql';
   const hasuraHttpTarget = hasuraHttpUrl.replace(/\/v1\/graphql\/?$/, '');
