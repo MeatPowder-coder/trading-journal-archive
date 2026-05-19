@@ -1,14 +1,9 @@
 import { spawn } from 'node:child_process';
+import { buildDevChildEnv } from './load-dev-env.mjs';
 
 const isWin = process.platform === 'win32';
 const pnpmCmd = isWin ? (process.env.ComSpec || 'cmd.exe') : 'pnpm';
-const childEnv = isWin
-  ? Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([key, value]) => key.length > 0 && !key.startsWith('=') && typeof value === 'string'
-      )
-    )
-  : process.env;
+const childEnv = buildDevChildEnv(process.env, { isWindows: isWin });
 
 const tasks = [
   { name: 'journal', script: 'dev:journal' },
