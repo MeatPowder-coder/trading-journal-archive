@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createChatSession,
   listChatMessages,
@@ -12,6 +12,12 @@ function fmt(iso: string | undefined) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString();
+}
+
+function isLoginRedirectError(error: unknown) {
+  const text = error instanceof Error ? error.message : String(error || '');
+  const normalized = text.toLowerCase();
+  return normalized.includes('/login?callbackurl') || normalized.includes('cannot post /login');
 }
 
 export function ChatDesk({
@@ -29,6 +35,7 @@ export function ChatDesk({
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('Chat ready');
+  const bootKeyRef = useRef('');
 
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === sessionId) || null,
@@ -78,9 +85,16 @@ export function ChatDesk({
   }, [activeTradeId, backendUrl, tokens?.accessToken]);
 
   useEffect(() => {
+    if (!tokens?.accessToken) {
+      bootKeyRef.current = '';
+      return;
+    }
+    const bootKey = `${tokens.accessToken.slice(0, 20)}:${activeTradeId || 0}`;
+    if (bootKeyRef.current === bootKey) return;
+    bootKeyRef.current = bootKey;
+
     let cancelled = false;
     async function boot() {
-      if (!tokens?.accessToken) return;
       try {
         const nextSessionId = await ensureDefaultSession();
         if (cancelled || !nextSessionId) return;
@@ -88,6 +102,10 @@ export function ChatDesk({
         await loadMessages(nextSessionId);
       } catch (error) {
         if (!cancelled) {
+          if (isLoginRedirectError(error)) {
+            setStatus('Chat unavailable in current backend (missing /v1/chat routes)');
+            return;
+          }
           setStatus(error instanceof Error ? error.message : 'Could not load chat');
         }
       }

@@ -26,6 +26,28 @@ function buildAuthHeaders(tokens: DesktopTokens | null) {
   return headers;
 }
 
+function parseJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split('.');
+  if (parts.length < 2) return null;
+  try {
+    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padLen = (4 - (normalized.length % 4)) % 4;
+    const padded = normalized.padEnd(normalized.length + padLen, '=');
+    const raw = atob(padded);
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function hasHasuraClaims(tokens: DesktopTokens | null) {
+  if (!tokens?.accessToken) return false;
+  const payload = parseJwtPayload(tokens.accessToken);
+  if (!payload) return false;
+  const claims = payload['https://hasura.io/jwt/claims'];
+  return Boolean(claims && typeof claims === 'object');
+}
+
 function resolveGraphqlHttpUrl() {
   if (useDevProxy()) {
     return '/v1/graphql';
@@ -49,23 +71,28 @@ export function DesktopApolloProvider({ children, tokens }: DesktopApolloProvide
       headers,
     });
 
-    const wsLink = new GraphQLWsLink(
-      createClient({
-        url: resolveGraphqlWsUrl(),
-        connectionParams: { headers },
-        retryAttempts: 5,
-        shouldRetry: () => true,
-      })
-    );
+    const useWs = hasHasuraClaims(tokens);
+    const wsLink = useWs
+      ? new GraphQLWsLink(
+          createClient({
+            url: resolveGraphqlWsUrl(),
+            connectionParams: { headers },
+            retryAttempts: 1,
+            shouldRetry: () => false,
+          })
+        )
+      : null;
 
-    const link = split(
-      ({ query }) => {
-        const definition = getMainDefinition(query);
-        return definition.kind === 'OperationDefinition' && definition.operation === 'subscription';
-      },
-      wsLink,
-      httpLink
-    );
+    const link = wsLink
+      ? split(
+          ({ query }) => {
+            const definition = getMainDefinition(query);
+            return definition.kind === 'OperationDefinition' && definition.operation === 'subscription';
+          },
+          wsLink,
+          httpLink
+        )
+      : httpLink;
 
     return new ApolloClient({
       link,

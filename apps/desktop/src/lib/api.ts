@@ -33,6 +33,11 @@ function useDevProxy() {
   return readEnvFlag(import.meta.env.VITE_USE_DEV_PROXY, true);
 }
 
+function useLocalApiFallback() {
+  if (!import.meta.env.DEV) return false;
+  return readEnvFlag(import.meta.env.VITE_ENABLE_LOCAL_API_FALLBACK, true);
+}
+
 function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.trim().replace(/\/+$/, '');
 }
@@ -49,7 +54,7 @@ function apiFallbackBaseUrls(baseUrl: string) {
     fallbacks.push(normalizeBaseUrl(explicit));
   }
 
-  if (import.meta.env.DEV && String(import.meta.env.VITE_ENABLE_LOCAL_API_FALLBACK || '0') === '1') {
+  if (useLocalApiFallback()) {
     fallbacks.push('http://127.0.0.1:4000');
   }
 
@@ -76,7 +81,7 @@ function wsFallbackBaseUrls(baseUrl: string) {
     fallbacks.push(normalizeBaseUrl(explicit));
   }
 
-  if (import.meta.env.DEV && String(import.meta.env.VITE_ENABLE_LOCAL_API_FALLBACK || '0') === '1') {
+  if (useLocalApiFallback()) {
     fallbacks.push('ws://127.0.0.1:4000');
   }
 
@@ -700,13 +705,35 @@ export function connectDesktopEvents(params: {
   let activeSocket: WebSocket | null = null;
   let closedByCaller = false;
   let index = 0;
+  let reconnectAttempts = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const connect = () => {
+  const clearReconnectTimer = () => {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+  };
+
+  const scheduleReconnect = () => {
     if (closedByCaller) return;
-    if (index >= bases.length) {
+    const maxAttempts = Math.max(1, Number(import.meta.env.VITE_WS_MAX_RETRIES || 8));
+    if (reconnectAttempts >= maxAttempts) {
       params.onStatus?.('Backend WSS unavailable');
       return;
     }
+    const delay = Math.min(12_000, 600 * 2 ** reconnectAttempts);
+    reconnectAttempts += 1;
+    clearReconnectTimer();
+    params.onStatus?.(`Backend WSS reconnecting (${Math.ceil(delay / 1000)}s)`);
+    reconnectTimer = setTimeout(() => {
+      index = (index + 1) % bases.length;
+      connect();
+    }, delay);
+  };
+
+  const connect = () => {
+    if (closedByCaller) return;
 
     const base = bases[index];
     const url = new URL(`${base}/v1/desktop/events`);
@@ -715,15 +742,27 @@ export function connectDesktopEvents(params: {
     const socket = new WebSocket(url.toString());
     activeSocket = socket;
 
-    socket.addEventListener('open', () => params.onStatus?.(`Backend WSS connected (${base})`));
-    socket.addEventListener('close', () => {
-      if (closedByCaller) return;
-      index += 1;
-      params.onStatus?.('Backend WSS reconnecting');
-      connect();
+    socket.addEventListener('open', () => {
+      if (socket !== activeSocket) return;
+      reconnectAttempts = 0;
+      params.onStatus?.(`Backend WSS connected (${base})`);
     });
-    socket.addEventListener('error', () => params.onStatus?.('Backend WSS error'));
+    socket.addEventListener('close', (event) => {
+      if (socket !== activeSocket) return;
+      if (closedByCaller) return;
+      // Token rejection should not trigger an aggressive reconnect loop.
+      if (event.code === 1008 || event.code === 4001 || event.code === 4401) {
+        params.onStatus?.('Backend WSS rejected token');
+        return;
+      }
+      scheduleReconnect();
+    });
+    socket.addEventListener('error', () => {
+      if (socket !== activeSocket) return;
+      params.onStatus?.('Backend WSS error');
+    });
     socket.addEventListener('message', (message) => {
+      if (socket !== activeSocket) return;
       try {
         params.onEvent(JSON.parse(String(message.data)) as DesktopEvent);
       } catch {
@@ -736,6 +775,7 @@ export function connectDesktopEvents(params: {
 
   return () => {
     closedByCaller = true;
+    clearReconnectTimer();
     activeSocket?.close();
   };
 }

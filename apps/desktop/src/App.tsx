@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { openUrl as openExternalUrl } from '@tauri-apps/plugin-opener';
 import {
@@ -179,6 +179,16 @@ function hasHasuraClaims(accessToken: string) {
   return Boolean(claims && typeof claims === 'object');
 }
 
+function desktopTokenSessionKey(accessToken: string) {
+  const payload = parseJwtPayload(accessToken);
+  const sub = typeof payload?.sub === 'string' ? payload.sub : '';
+  const sid = payload && (typeof payload.sid === 'number' || typeof payload.sid === 'string')
+    ? String(payload.sid)
+    : '';
+  if (sub && sid) return `${sub}:${sid}`;
+  return accessToken.slice(0, 20);
+}
+
 function captureChartImageUrl() {
   const canvas = document.querySelector<HTMLCanvasElement>('.candle-chart canvas');
   if (!canvas) return '';
@@ -272,6 +282,7 @@ export default function App() {
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>('Ready');
+  const hasuraUpgradeSkipSessionsRef = useRef<Set<string>>(new Set());
 
   const market = useMarketData(symbol, timeframe, marketType, Boolean(tokens?.accessToken));
 
@@ -465,11 +476,21 @@ export default function App() {
     if (!tokens?.accessToken || !tokens.refreshToken) return;
     if (hasHasuraClaims(tokens.accessToken)) return;
 
+    const sessionKey = desktopTokenSessionKey(tokens.accessToken);
+    if (hasuraUpgradeSkipSessionsRef.current.has(sessionKey)) return;
+
     let disposed = false;
+    hasuraUpgradeSkipSessionsRef.current.add(sessionKey);
     rotateTokens(tokens.refreshToken)
       .then((next) => {
         if (disposed) return;
-        setMessage(`Desktop tokens upgraded (${next.accessToken.slice(0, 10)}...)`);
+        if (hasHasuraClaims(next.accessToken)) {
+          setMessage(`Desktop tokens upgraded (${next.accessToken.slice(0, 10)}...)`);
+          return;
+        }
+        // Some backends still mint desktop JWTs without Hasura claims.
+        // Avoid a token-rotation loop that can collapse the app.
+        setMessage('Desktop token has no Hasura claims (compat mode)');
       })
       .catch(() => {
         if (!disposed) setMessage('Token upgrade pending');
