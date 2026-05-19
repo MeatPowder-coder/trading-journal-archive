@@ -189,6 +189,24 @@ function desktopTokenSessionKey(accessToken: string) {
   return accessToken.slice(0, 20);
 }
 
+function isDesktopSessionPayload(payload: unknown): payload is DesktopSessionResponse {
+  return Boolean(
+    payload &&
+      typeof payload === 'object' &&
+      (payload as any).authenticated === true &&
+      (payload as any).user
+  );
+}
+
+function isDesktopCockpitPayload(payload: unknown): payload is DesktopCockpitResponse {
+  return Boolean(
+    payload &&
+      typeof payload === 'object' &&
+      (payload as any).success === true &&
+      (payload as any).account
+  );
+}
+
 function captureChartImageUrl() {
   const canvas = document.querySelector<HTMLCanvasElement>('.candle-chart canvas');
   if (!canvas) return '';
@@ -301,6 +319,7 @@ export default function App() {
   });
 
   const openTradesView = useMemo(() => cockpit?.openTrades || [], [cockpit?.openTrades]);
+  const hasGraphqlAccess = Boolean(tokens?.accessToken && hasHasuraClaims(tokens.accessToken));
   const dashboardWebTrades = useMemo(
     () =>
       desktopTrades.filter((trade) => {
@@ -385,6 +404,9 @@ export default function App() {
           fetchDesktopBootstrap({ baseUrl: backendUrl, accessToken }),
           fetchDesktopTrades({ baseUrl: backendUrl, accessToken, limit: 600 }).catch(() => null),
         ]);
+        if (!isDesktopSessionPayload(bootstrap?.session) || !isDesktopCockpitPayload(bootstrap?.cockpit)) {
+          throw new Error('Invalid desktop bootstrap response');
+        }
         setSession(bootstrap.session);
         setCockpit(bootstrap.cockpit);
         setDesktopTrades(
@@ -406,6 +428,9 @@ export default function App() {
           fetchDesktopCockpit({ baseUrl: backendUrl, accessToken }),
           fetchDesktopTrades({ baseUrl: backendUrl, accessToken, limit: 600 }).catch(() => null),
         ]);
+        if (!isDesktopSessionPayload(sessionPayload) || !isDesktopCockpitPayload(cockpitPayload)) {
+          throw new Error('Desktop auth/session invalid');
+        }
         setSession(sessionPayload);
         setCockpit(cockpitPayload);
         setDesktopTrades(
@@ -1357,17 +1382,57 @@ export default function App() {
 
           {activeTab === 'cuentas' && !showWebMirror ? (
             <section className="parity-panel">
-              <AccountBalance
-                trades={dashboardWebTrades as any[]}
-                prices={parityPrices}
-                calculateRealTimePnL={calculateRealTimePnL}
-              />
+              {hasGraphqlAccess ? (
+                <AccountBalance
+                  trades={dashboardWebTrades as any[]}
+                  prices={parityPrices}
+                  calculateRealTimePnL={calculateRealTimePnL}
+                />
+              ) : (
+                <article className="parity-card">
+                  <h3>Cuentas (modo compatibilidad)</h3>
+                  <p className="muted">
+                    El backend actual no emite claims de Hasura para esta sesión desktop. Mostrando saldo y riesgo desde cockpit.
+                  </p>
+                  <div className="mini-table">
+                    <div><b>Balance USDT</b><b>Riesgo Máx (2%)</b><b>Open Trades</b><b>Pendientes</b></div>
+                    <div>
+                      <span>{formatNumber(readNumber(cockpit?.account as any, 'balanceUsdt'), 2)}</span>
+                      <span>{formatNumber(readNumber((cockpit?.account as any)?.maxRisk as any, 'amount'), 2)}</span>
+                      <span>{openTradesView.length}</span>
+                      <span>{Array.isArray(cockpit?.pendingOrders) ? cockpit?.pendingOrders.length : 0}</span>
+                    </div>
+                  </div>
+                </article>
+              )}
             </section>
           ) : null}
 
           {activeTab === 'transacciones' && !showWebMirror ? (
             <section className="parity-panel">
-              <TransactionList />
+              {hasGraphqlAccess ? (
+                <TransactionList />
+              ) : (
+                <article className="parity-card">
+                  <h3>Transacciones (modo compatibilidad)</h3>
+                  <p className="muted">
+                    Vista resumida desde `trades_activos` (desktop API), porque GraphQL no está disponible para este token.
+                  </p>
+                  <div className="mini-table">
+                    <div><b>ID</b><b>Símbolo</b><b>Estado</b><b>Apertura</b><b>PnL</b></div>
+                    {desktopTrades.slice(0, 80).map((row, idx) => (
+                      <div key={`tx-compat-${idx}`}>
+                        <span>#{readString(row, 'id', '-')}</span>
+                        <span>{readString(row, 'simbolo', '-')}</span>
+                        <span>{readString(row, 'estado', '-')}</span>
+                        <span>{formatDateIso(readString(row, 'fecha_apertura', '') || null)}</span>
+                        <span>{formatNumber(readNumber(row, 'pnl_realizado'), 2)}</span>
+                      </div>
+                    ))}
+                    {!desktopTrades.length ? <p className="muted">No trades data available.</p> : null}
+                  </div>
+                </article>
+              )}
             </section>
           ) : null}
 

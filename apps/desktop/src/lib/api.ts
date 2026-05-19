@@ -91,6 +91,18 @@ function wsFallbackBaseUrls(baseUrl: string) {
 
 async function parseJsonOrThrow<T>(response: Response): Promise<T> {
   const text = await response.text();
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+  const looksHtml = /^\s*</.test(text);
+  const redirectedToLogin = response.url.includes('/login');
+
+  if (redirectedToLogin) {
+    throw new Error('Authentication required (redirected to login)');
+  }
+
+  if (!contentType.includes('application/json') && looksHtml) {
+    throw new Error('Unexpected non-JSON response');
+  }
+
   let payload: unknown = null;
   try {
     payload = text ? JSON.parse(text) : null;
@@ -166,7 +178,15 @@ async function fetchYahooProxyPrice(baseUrl: string, ticker: string) {
 }
 
 function shouldTryApiFallback(status: number) {
-  return status === 404 || status === 405 || status === 500 || status === 501 || status === 502 || status === 503;
+  return (
+    status === 404 ||
+    status === 405 ||
+    status === 500 ||
+    status === 501 ||
+    status === 502 ||
+    status === 503 ||
+    (status >= 520 && status <= 527)
+  );
 }
 
 async function fetchApiJsonWithFallback<T>(params: {
