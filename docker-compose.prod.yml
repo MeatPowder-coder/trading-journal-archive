@@ -26,9 +26,9 @@ services:
       # Nota: Dentro de Docker, Hasura se llama 'hasura' (nombre del servicio)
       - HASURA_INTERNAL_URL=http://hasura:8080/v1/graphql 
       
-      - NEXT_PUBLIC_HASURA_ADMIN_SECRET=pon_una_clave_segura_aqui
+      - NEXT_PUBLIC_HASURA_ADMIN_SECRET=${NEXT_PUBLIC_HASURA_ADMIN_SECRET}
       - NEXTAUTH_URL=https://journal.agentame.xyz
-      - NEXTAUTH_SECRET=zH4Sp3a3pTF3kB0dM9k8q8fN97LBQebr
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - ALLOWED_EMAIL=${ALLOWED_EMAIL}

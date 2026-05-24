@@ -1,4 +1,6 @@
-## Trading Journal + Binance Listener
+## Trading Journal (Archive)
+
+> Proyecto legado publicado como portafolio técnico. No usar secretos reales ni endpoints privados.
 
 This project es un trading journal en Next.js que consume Hasura para sus datos en tiempo real y ahora incluye:
 

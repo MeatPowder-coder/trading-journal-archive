@@ -28,13 +28,13 @@ export function ApolloProvider({ children }: { children: ReactNode }) {
 
       // Configuración HTTP
       const httpLink = new HttpLink({
-        uri: process.env.NEXT_PUBLIC_HASURA_HTTP_URL || "http://149.130.182.57:8085/v1/graphql",
+        uri: process.env.NEXT_PUBLIC_HASURA_HTTP_URL || "http://localhost:8080/v1/graphql",
         headers
       });
 
       // Configuración WebSocket (solo en cliente)
       const wsLink = new GraphQLWsLink(createClient({
-        url: process.env.NEXT_PUBLIC_HASURA_WS_URL || "ws://149.130.182.57:8085/v1/graphql",
+        url: process.env.NEXT_PUBLIC_HASURA_WS_URL || "ws://localhost:8080/v1/graphql",
         connectionParams: {
           headers
         },
