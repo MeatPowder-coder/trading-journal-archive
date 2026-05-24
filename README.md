@@ -1,56 +1,59 @@
-# Trading Journal (Portfolio Archive)
+# Trading Journal System (Archived)
 
 [Español](#español) | [English](#english)
 
 ## Español
 
-Repositorio de portafolio que muestra un sistema full-stack de journaling de trading con versión web + desktop, integración en tiempo real y automatización operativa.
+### Descripción
 
-### Por qué importa este proyecto
+Sistema full-stack para registro, análisis y operación de ejecuciones de trading, con cliente web, cliente desktop, backend complementario, integración de datos en tiempo real y automatizaciones operativas.
 
-Este proyecto fue mi implementación más completa de sistemas aplicada a un caso real:
+### Alcance funcional
 
-- Producto web y desktop con base de código compartida.
-- Integración de datos en tiempo real (WebSocket).
-- Backend API y procesos asíncronos.
-- Diseño de esquema SQL y migraciones incrementales.
-- Autenticación, observabilidad operativa y automatizaciones.
+- Registro y gestión de trades (`OPEN`/`CLOSED`, estrategia, métricas de riesgo, notas).
+- Cálculo y visualización de PnL en tiempo real (fuentes Yahoo/Binance según broker).
+- Flujo de órdenes y protección (SL/TP, limit orders pendientes, controles disciplinarios).
+- Chat asistido por IA con contexto operativo y almacenamiento de sesiones/mensajes.
+- Alertas críticas con deduplicación, cooldown y fallback.
+- Paridad funcional web/desktop con rutas y contratos compartidos.
 
-### Highlights técnicos
+### Arquitectura
 
-- Monorepo con `apps/*` y `packages/*`.
-- Frontend web en `Next.js` y desktop en `Tauri + React + Vite`.
-- API dedicada en `Fastify` para rutas desktop/unificadas.
-- PostgreSQL + Hasura para modelo de datos y tiempo real.
-- Capa de IA para asistencia contextual (chat + herramientas de dominio).
-- Motor de alertas críticas con deduplicación y fallback.
-- Pipeline de build desktop en GitHub Actions.
+- Monorepo:
+  - `src/`: aplicación web principal (`Next.js`, UI, API routes, auth, chat, reglas de negocio).
+  - `apps/desktop`: cliente desktop (`Tauri + React + Vite`).
+  - `apps/api`: API Fastify para endpoints unificados y eventos desktop.
+  - `packages/journal-ui`: componentes reutilizables.
+  - `packages/journal-data`: contratos de navegación/paridad.
+  - `packages/shared`: tipos y utilidades de dominio.
+  - `migrations/`: evolución SQL por fases.
+- Datos:
+  - PostgreSQL como fuente principal.
+  - Hasura para capa GraphQL y tiempo real.
+- Integraciones:
+  - Binance (órdenes/eventos).
+  - Yahoo Finance (precios de mercado).
+  - Proveedores LLM para asistencia IA.
 
-### Arquitectura (resumen)
+### Modelo de datos (resumen)
 
-- `src/`: app web principal (UI, API routes, auth, chat, reglas de negocio).
-- `apps/desktop`: cliente desktop y shell nativo.
-- `apps/api`: backend complementario para desktop/eventos.
-- `packages/journal-ui`: componentes reutilizables.
-- `packages/journal-data`: contratos de navegación/tabs/parity.
-- `migrations/`: evolución de esquema SQL por fases.
+- Trading:
+  - `trades_activos`
+  - `pending_limit_orders`
+  - `pending_limit_order_events`
+  - `trading_sessions`
+  - `account_snapshots`
+  - `sl_movements`, `sltp_moves`, `trade_metric_snapshots`, `chart_snapshots`, `ai_analyses`
+- Chat y memoria:
+  - `react_chat_sessions`
+  - `react_chat_messages`
+  - `user_memories`
+- Alerting:
+  - `alert_trade_state`
+  - `alert_notification_events`
+  - `alert_runtime_config`
 
-### Qué demuestra en entrevistas
-
-- Diseño de arquitectura modular en un proyecto que evolucionó de MVP a sistema complejo.
-- Capacidad de integrar múltiples runtimes (web, API node, desktop nativo).
-- Toma de decisiones de producto/ingeniería bajo restricciones reales.
-- Mantenimiento incremental: migraciones, hardening, fallback paths y operación en VM.
-
-### Estado del repositorio
-
-- `ARCHIVED`: se conserva como evidencia técnica de portafolio.
-- No se recomienda uso productivo tal cual.
-- Secretos y artefactos sensibles fueron removidos del contenido público.
-
-Detalles de publicación segura: [`ARCHIVE_PUBLICATION.md`](ARCHIVE_PUBLICATION.md)
-
-### Demo local rápida
+### Operación local
 
 1. Instalar dependencias:
 
@@ -58,93 +61,126 @@ Detalles de publicación segura: [`ARCHIVE_PUBLICATION.md`](ARCHIVE_PUBLICATION.
 pnpm install
 ```
 
-2. Configurar variables:
+2. Configurar entorno:
 
 ```bash
 cp .env.example .env.local
 ```
 
-3. Levantar web:
+3. Ejecutar web:
 
 ```bash
 pnpm dev
 ```
 
-4. (Opcional) API desktop + app desktop:
+4. (Opcional) backend desktop + app desktop:
 
 ```bash
 pnpm dev:desktop:backend
 pnpm dev:trading
 ```
 
-### Stack principal
+### Variables de entorno clave
 
-- TypeScript
-- Next.js
-- React
-- Fastify
-- PostgreSQL
-- Hasura
-- Tauri
-- GitHub Actions
+- Core/API:
+  - `DATABASE_URL`
+  - `NEXTAUTH_URL`
+  - `NEXTAUTH_SECRET`
+  - `DESKTOP_AUTH_SECRET`
+- GraphQL/Hasura:
+  - `NEXT_PUBLIC_HASURA_HTTP_URL`
+  - `NEXT_PUBLIC_HASURA_WS_URL`
+  - `NEXT_PUBLIC_HASURA_ADMIN_SECRET`
+  - `HASURA_HTTP_URL`
+  - `HASURA_ADMIN_SECRET`
+- Integraciones de mercado:
+  - `BINANCE_API_KEY`
+  - `BINANCE_API_SECRET`
+  - `BINANCE_FUTURES_API_KEY`
+  - `BINANCE_FUTURES_API_SECRET`
+- IA:
+  - `OPENAI_API_KEY`
+  - `GOOGLE_GENERATIVE_AI_API_KEY`
+  - `NVIDIA_API_BASE_URL`
+  - `NVIDIA_API_KEY`
+  - `KIMI_MODEL_ID`
+- Alertas:
+  - `ALERTS_INTERNAL_TOKEN`
+  - `TELEGRAM_BOT_TOKEN`
+  - `TELEGRAM_CHAT_ID`
+  - `N8N_FALLBACK_WEBHOOK_URL`
 
-### Nota de transición
+### CI/CD y build
 
-Este repo queda como archivo histórico. El trabajo nuevo enfocado en finanzas/contabilidad continúa en:
+- Workflow de build desktop para Windows en `.github/workflows/desktop-windows-build.yml`.
+- Build local desktop:
 
-- `https://github.com/MeatPowder-coder/finance-system`
+```bash
+npm --prefix apps/desktop run tauri:build
+```
+
+### Estado y transición
+
+- Estado de mantenimiento: `Archived` (sin desarrollo activo de nuevas features en este repositorio).
+- Continuidad funcional en dominio financiero/contable:
+  - `https://github.com/MeatPowder-coder/finance-system`
+- Notas de saneamiento y publicación:
+  - [`ARCHIVE_PUBLICATION.md`](ARCHIVE_PUBLICATION.md)
 
 ---
 
 ## English
 
-Portfolio repository showcasing a full-stack trading journal system with web + desktop apps, real-time data flows, and operational automation.
+### Description
 
-### Why this project matters
+Full-stack system for logging, analyzing, and operating trading executions, including web and desktop clients, a complementary backend, real-time data integration, and operational automation.
 
-This was my most complete systems implementation for a real-world use case:
+### Functional scope
 
-- Web and desktop product with shared code.
-- Real-time market/data integration (WebSocket).
-- Dedicated backend APIs and async processes.
-- SQL schema design with incremental migrations.
-- Authentication, observability, and operational automations.
+- Trade lifecycle management (`OPEN`/`CLOSED`, strategy fields, risk metrics, notes).
+- Real-time PnL calculation and visualization (Yahoo/Binance by broker).
+- Order/protection flows (SL/TP, pending limit orders, discipline controls).
+- AI-assisted chat with operational context plus persisted sessions/messages.
+- Critical alerting with deduplication, cooldown, and fallback channels.
+- Web/desktop parity through shared routes and contracts.
 
-### Technical highlights
+### Architecture
 
-- Monorepo structure with `apps/*` and `packages/*`.
-- Web frontend built with `Next.js`; desktop built with `Tauri + React + Vite`.
-- Dedicated `Fastify` API for desktop/unified routes.
-- `PostgreSQL + Hasura` for data model and real-time access.
-- AI assistant layer with domain tools.
-- Critical alerts engine with deduplication and fallback flows.
-- Desktop CI build pipeline in GitHub Actions.
+- Monorepo layout:
+  - `src/`: main web app (`Next.js`, UI, API routes, auth, chat, domain logic).
+  - `apps/desktop`: desktop client (`Tauri + React + Vite`).
+  - `apps/api`: Fastify API for unified endpoints and desktop events.
+  - `packages/journal-ui`: reusable UI components.
+  - `packages/journal-data`: navigation/parity contracts.
+  - `packages/shared`: domain types/utilities.
+  - `migrations/`: phased SQL evolution.
+- Data platform:
+  - PostgreSQL as primary store.
+  - Hasura for GraphQL and real-time subscriptions.
+- Integrations:
+  - Binance (order/event workflows).
+  - Yahoo Finance (market pricing).
+  - LLM providers for AI assistant features.
 
-### Architecture (high level)
+### Data model (high level)
 
-- `src/`: main web app (UI, API routes, auth, chat, business rules).
-- `apps/desktop`: desktop client and native shell.
-- `apps/api`: complementary backend for desktop/events.
-- `packages/journal-ui`: reusable UI components.
-- `packages/journal-data`: shared navigation/tabs contracts.
-- `migrations/`: SQL schema evolution by phase.
+- Trading domain:
+  - `trades_activos`
+  - `pending_limit_orders`
+  - `pending_limit_order_events`
+  - `trading_sessions`
+  - `account_snapshots`
+  - `sl_movements`, `sltp_moves`, `trade_metric_snapshots`, `chart_snapshots`, `ai_analyses`
+- Chat and memory:
+  - `react_chat_sessions`
+  - `react_chat_messages`
+  - `user_memories`
+- Alerting:
+  - `alert_trade_state`
+  - `alert_notification_events`
+  - `alert_runtime_config`
 
-### Interview relevance
-
-- Modular architecture design evolving from MVP to complex system.
-- Multi-runtime integration (web, Node API, native desktop).
-- Product/engineering decision-making under real constraints.
-- Incremental maintenance: migrations, hardening, fallback paths, VM operations.
-
-### Repository status
-
-- `ARCHIVED`: kept as a technical portfolio artifact.
-- Not recommended for production use as-is.
-- Sensitive artifacts and secrets were removed from public history/content.
-
-Secure publication notes: [`ARCHIVE_PUBLICATION.md`](ARCHIVE_PUBLICATION.md)
-
-### Quick local demo
+### Local run
 
 1. Install dependencies:
 
@@ -158,7 +194,7 @@ pnpm install
 cp .env.example .env.local
 ```
 
-3. Run web app:
+3. Start web:
 
 ```bash
 pnpm dev
@@ -170,3 +206,21 @@ pnpm dev
 pnpm dev:desktop:backend
 pnpm dev:trading
 ```
+
+### CI/CD and build
+
+- Windows desktop build workflow:
+  - `.github/workflows/desktop-windows-build.yml`
+- Local desktop build:
+
+```bash
+npm --prefix apps/desktop run tauri:build
+```
+
+### Status and transition
+
+- Maintenance status: `Archived` (no active feature development in this repository).
+- Ongoing work in finance/accounting domain:
+  - `https://github.com/MeatPowder-coder/finance-system`
+- Sanitization/publication notes:
+  - [`ARCHIVE_PUBLICATION.md`](ARCHIVE_PUBLICATION.md)
