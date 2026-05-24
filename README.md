@@ -1,10 +1,14 @@
 # Trading Journal (Portfolio Archive)
 
+[Español](#español) | [English](#english)
+
+## Español
+
 Repositorio de portafolio que muestra un sistema full-stack de journaling de trading con versión web + desktop, integración en tiempo real y automatización operativa.
 
-## Why this project matters
+### Por qué importa este proyecto
 
-Este proyecto fue mi implementación más completa de sistemas aplicada a un caso real, cubriendo:
+Este proyecto fue mi implementación más completa de sistemas aplicada a un caso real:
 
 - Producto web y desktop con base de código compartida.
 - Integración de datos en tiempo real (WebSocket).
@@ -12,7 +16,7 @@ Este proyecto fue mi implementación más completa de sistemas aplicada a un cas
 - Diseño de esquema SQL y migraciones incrementales.
 - Autenticación, observabilidad operativa y automatizaciones.
 
-## Highlights técnicos
+### Highlights técnicos
 
 - Monorepo con `apps/*` y `packages/*`.
 - Frontend web en `Next.js` y desktop en `Tauri + React + Vite`.
@@ -22,7 +26,7 @@ Este proyecto fue mi implementación más completa de sistemas aplicada a un cas
 - Motor de alertas críticas con deduplicación y fallback.
 - Pipeline de build desktop en GitHub Actions.
 
-## Arquitectura (resumen)
+### Arquitectura (resumen)
 
 - `src/`: app web principal (UI, API routes, auth, chat, reglas de negocio).
 - `apps/desktop`: cliente desktop y shell nativo.
@@ -31,14 +35,14 @@ Este proyecto fue mi implementación más completa de sistemas aplicada a un cas
 - `packages/journal-data`: contratos de navegación/tabs/parity.
 - `migrations/`: evolución de esquema SQL por fases.
 
-## Qué demuestra en entrevistas
+### Qué demuestra en entrevistas
 
 - Diseño de arquitectura modular en un proyecto que evolucionó de MVP a sistema complejo.
 - Capacidad de integrar múltiples runtimes (web, API node, desktop nativo).
 - Toma de decisiones de producto/ingeniería bajo restricciones reales.
 - Mantenimiento incremental: migraciones, hardening, fallback paths y operación en VM.
 
-## Estado del repositorio
+### Estado del repositorio
 
 - `ARCHIVED`: se conserva como evidencia técnica de portafolio.
 - No se recomienda uso productivo tal cual.
@@ -46,7 +50,7 @@ Este proyecto fue mi implementación más completa de sistemas aplicada a un cas
 
 Detalles de publicación segura: [`ARCHIVE_PUBLICATION.md`](ARCHIVE_PUBLICATION.md)
 
-## Demo local rápida
+### Demo local rápida
 
 1. Instalar dependencias:
 
@@ -73,7 +77,7 @@ pnpm dev:desktop:backend
 pnpm dev:trading
 ```
 
-## Stack principal
+### Stack principal
 
 - TypeScript
 - Next.js
@@ -84,8 +88,85 @@ pnpm dev:trading
 - Tauri
 - GitHub Actions
 
-## Nota de transición
+### Nota de transición
 
 Este repo queda como archivo histórico. El trabajo nuevo enfocado en finanzas/contabilidad continúa en:
 
 - `https://github.com/MeatPowder-coder/finance-system`
+
+---
+
+## English
+
+Portfolio repository showcasing a full-stack trading journal system with web + desktop apps, real-time data flows, and operational automation.
+
+### Why this project matters
+
+This was my most complete systems implementation for a real-world use case:
+
+- Web and desktop product with shared code.
+- Real-time market/data integration (WebSocket).
+- Dedicated backend APIs and async processes.
+- SQL schema design with incremental migrations.
+- Authentication, observability, and operational automations.
+
+### Technical highlights
+
+- Monorepo structure with `apps/*` and `packages/*`.
+- Web frontend built with `Next.js`; desktop built with `Tauri + React + Vite`.
+- Dedicated `Fastify` API for desktop/unified routes.
+- `PostgreSQL + Hasura` for data model and real-time access.
+- AI assistant layer with domain tools.
+- Critical alerts engine with deduplication and fallback flows.
+- Desktop CI build pipeline in GitHub Actions.
+
+### Architecture (high level)
+
+- `src/`: main web app (UI, API routes, auth, chat, business rules).
+- `apps/desktop`: desktop client and native shell.
+- `apps/api`: complementary backend for desktop/events.
+- `packages/journal-ui`: reusable UI components.
+- `packages/journal-data`: shared navigation/tabs contracts.
+- `migrations/`: SQL schema evolution by phase.
+
+### Interview relevance
+
+- Modular architecture design evolving from MVP to complex system.
+- Multi-runtime integration (web, Node API, native desktop).
+- Product/engineering decision-making under real constraints.
+- Incremental maintenance: migrations, hardening, fallback paths, VM operations.
+
+### Repository status
+
+- `ARCHIVED`: kept as a technical portfolio artifact.
+- Not recommended for production use as-is.
+- Sensitive artifacts and secrets were removed from public history/content.
+
+Secure publication notes: [`ARCHIVE_PUBLICATION.md`](ARCHIVE_PUBLICATION.md)
+
+### Quick local demo
+
+1. Install dependencies:
+
+```bash
+pnpm install
+```
+
+2. Configure environment:
+
+```bash
+cp .env.example .env.local
+```
+
+3. Run web app:
+
+```bash
+pnpm dev
+```
+
+4. (Optional) desktop backend + desktop app:
+
+```bash
+pnpm dev:desktop:backend
+pnpm dev:trading
+```
